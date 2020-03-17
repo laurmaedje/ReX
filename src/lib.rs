@@ -1,12 +1,8 @@
 #[macro_use]
 extern crate serde_derive;
-extern crate serde;
 
 #[macro_use]
 extern crate log;
-
-extern crate stix2 as stix;
-extern crate font_types;
 
 #[macro_use]
 extern crate static_map;
@@ -28,5 +24,3 @@ mod font;
 mod functions;
 
 pub use render::*;
-pub use font_types::fp;
-

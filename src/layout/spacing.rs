@@ -1,6 +1,6 @@
-use font::{AtomType, FontUnit};
-use font::constants::UNITS_PER_EM;
-use layout::Style;
+use crate::font::{AtomType};
+use crate::layout::Style;
+use crate::dimensions::{Length, Em};
 
 pub fn atom_space(left: AtomType, right: AtomType, style: Style) -> Spacing {
     if style >= Style::TextCramped {
@@ -57,12 +57,12 @@ pub enum Spacing {
 }
 
 impl Spacing {
-    pub fn to_unit(self) -> FontUnit {
+    pub fn to_length(self) -> Length<Em> {
         match self {
-            Spacing::None   => 0.into(),
-            Spacing::Thin   => UNITS_PER_EM / 6,     // 1/6 EM
-            Spacing::Medium => 2 * UNITS_PER_EM / 9, // 2/9 EM
-            Spacing::Thick  => UNITS_PER_EM / 3,     // 1/3 EM
+            Spacing::None   => Length::new(0.0, Em),
+            Spacing::Thin   => Length::new(1. / 6., Em),
+            Spacing::Medium => Length::new(2. / 9., Em),
+            Spacing::Thick  => Length::new(1. / 3., Em),
         }
     }
 }

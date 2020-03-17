@@ -1,4 +1,4 @@
-use font_types::Style;
+use super::Style;
 
 // BMP codepoint points of each symbol group.
 const UPPER_A: u32 = 0x41;
@@ -75,15 +75,17 @@ static DIGIT_LUT: [u32; 28] = [
 /// Take a codepoint and a stlye (a weight and family pair), and apply the
 /// current font style to the given codepoint.
 #[inline]
-pub fn style_symbol(codepoint: u32, style: Style) -> u32 {
-    match codepoint {
-        LOWER_A...LOWER_Z => style_lookup(&LATIN_LOWER_LUT, codepoint, style),
-        UPPER_A...UPPER_Z => style_lookup(&LATIN_UPPER_LUT, codepoint, style),
-        UPPER_ALPHA...UPPER_OMEGA => style_lookup(&GREEK_UPPER_LUT, codepoint, style),
-        LOWER_ALPHA...LOWER_OMEGA => style_lookup(&GREEK_LOWER_LUT, codepoint, style),
-        DIGIT_0...DIGIT_9 => style_lookup(&DIGIT_LUT, codepoint, style),
+pub fn style_symbol(codepoint: char, style: Style) -> char {
+    let codepoint = codepoint as u32;
+    let cp = match codepoint {
+        LOWER_A ..= LOWER_Z => style_lookup(&LATIN_LOWER_LUT, codepoint, style),
+        UPPER_A ..= UPPER_Z => style_lookup(&LATIN_UPPER_LUT, codepoint, style),
+        UPPER_ALPHA ..= UPPER_OMEGA => style_lookup(&GREEK_UPPER_LUT, codepoint, style),
+        LOWER_ALPHA ..= LOWER_OMEGA => style_lookup(&GREEK_LOWER_LUT, codepoint, style),
+        DIGIT_0 ..= DIGIT_9 => style_lookup(&DIGIT_LUT, codepoint, style),
         _ => style_other(codepoint, style),
-    }
+    };
+    std::char::from_u32(cp).unwrap()
 }
 
 fn style_lookup(lut: &[u32], codepoint: u32, style: Style) -> u32 {

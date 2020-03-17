@@ -1,66 +1,64 @@
 //! This is a collection of tools used for converting ParseNodes into LayoutNodes.
-use std::convert::From;
-use std::ops::Mul;
 
-use font;
-use font::constants;
-use font::{Direction, Glyph, VariantGlyph, FontUnit};
-use dimensions::Unit;
-use layout::LayoutSettings;
+use crate::font::{Glyph, Direction, VariantGlyph};
+use crate::dimensions::{*};
+use crate::layout::LayoutSettings;
 
-use super::Style;
+use super::{Style};
 use super::builders;
 use super::{LayoutNode, LayoutVariant, LayoutGlyph};
-use parser::nodes::Rule;
+use crate::parser::nodes::Rule;
 
 pub trait AsLayoutNode {
-    fn as_layout(&self, config: LayoutSettings) -> LayoutNode;
+    fn as_layout(&self, config: &LayoutSettings) -> LayoutNode;
 }
 
-impl AsLayoutNode for Glyph {
-    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
+impl<'a> AsLayoutNode for Glyph<'a> {
+    fn as_layout(&self, config: &LayoutSettings) -> LayoutNode {
         LayoutNode {
             height: self.height().scaled(config),
             width:  self.advance.scaled(config),
             depth:  self.depth().scaled(config),
             node:   LayoutVariant::Glyph(LayoutGlyph {
-                unicode: self.unicode,
-                scale: scale(1, config),
+                gid: self.gid,
+                scale: config.scale_factor(),
                 attachment: self.attachment.scaled(config),
                 italics: self.italics.scaled(config),
-                offset:  FontUnit::from(0),
+                offset:  Length::zero(),
             })
         }
     }
 }
 
 impl AsLayoutNode for Rule {
-    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
+    fn as_layout(&self, config: &LayoutSettings) -> LayoutNode {
         LayoutNode {
             node:   LayoutVariant::Rule,
             width:  self.width .scaled(config),
             height: self.height.scaled(config),
-            depth:  FontUnit::from(0),
+            depth:  Length::zero(),
         }
     }
 }
 
-impl AsLayoutNode for VariantGlyph {
-    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
+impl<'a> AsLayoutNode for VariantGlyph<'a> {
+    fn as_layout(&self, config: &LayoutSettings) -> LayoutNode {
         match *self {
-            VariantGlyph::Replacement(g) => {
-                let glyph = font::glyph_metrics(g.unicode);
+            VariantGlyph::Replacement(gid) => {
+                let glyph = config.ctx.glyph_from_gid(gid);
                 glyph.as_layout(config)
             },
 
-            VariantGlyph::Constructable(dir, ref c) => {
+            VariantGlyph::Constructable(dir, parts) => {
                 match dir {
                     Direction::Vertical => {
                         let mut contents = builders::VBox::new();
-                        for instr in c.iter().rev() {
-                            contents.add_node(instr.glyph.as_layout(config));
-                            if instr.overlap != FontUnit::from(0) {
-                                let kern = -instr.overlap.scaled(config) - instr.glyph.depth();
+                        for instr in parts {
+                            let glyph = config.ctx.glyph_from_gid(instr.gid);
+                            contents.insert_node(0, glyph.as_layout(config));
+                            if instr.overlap != 0 {
+                                let overlap = Length::new(instr.overlap, Font);
+                                let kern = -(overlap + glyph.depth()).scaled(config);
                                 contents.add_node(kern!(vert: kern));
                             }
                         }
@@ -70,12 +68,13 @@ impl AsLayoutNode for VariantGlyph {
 
                     Direction::Horizontal => {
                         let mut contents = builders::HBox::new();
-                        for instr in c.iter() {
-                            if instr.overlap != FontUnit::from(0) {
-                                let kern = -instr.overlap.scaled(config);
+                        for instr in parts {
+                            let glyph = config.ctx.glyph_from_gid(instr.gid);
+                            if instr.overlap != 0 {
+                                let kern = -Length::new(instr.overlap, Font).scaled(config);
                                 contents.add_node(kern!(horz: kern));
                             }
-                            contents.add_node(instr.glyph.as_layout(config));
+                            contents.add_node(glyph.as_layout(config));
                         }
 
                         contents.build()
@@ -86,52 +85,59 @@ impl AsLayoutNode for VariantGlyph {
     }
 }
 
+impl<'a> LayoutSettings<'a> {
+    fn scale_factor(&self) -> f64 {
+        match self.style {
+            Style::Display |
+            Style::DisplayCramped |
+            Style::Text |
+            Style::TextCramped
+                => 1.0,
 
-fn scale<T>(n: T, config: LayoutSettings) -> FontUnit
-    where FontUnit: From<T>,
-          T: Mul<FontUnit, Output=FontUnit>
-{
-    match config.style {
-        Style::Display |
-        Style::DisplayCramped |
-        Style::Text |
-        Style::TextCramped
-            => FontUnit::from(n),
+            Style::Script |
+            Style::ScriptCramped
+                => 0.01 * self.constants.script_percent_scale_down,
 
-        Style::Script |
-        Style::ScriptCramped
-            => n * constants::SCRIPT_PERCENT_SCALE_DOWN,
-
-        Style::ScriptScript |
-        Style::ScriptScriptCramped
-            => n * constants::SCRIPT_SCRIPT_PERCENT_SCALE_DOWN,
+            Style::ScriptScript |
+            Style::ScriptScriptCramped
+                => 0.01 * self.constants.script_script_percent_scale_down,
+        }
+    }
+    fn scale_font_unit(&self, length: Length<Font>) -> Length<Px> {
+        length * self.font_units_to_world
+    }
+    fn scale_length<U>(&self, length: Length<U>) -> Length<U> {
+        length * self.scale_factor()
+    }
+    pub fn to_font(&self, length: Length<Px>) -> Length<Font> {
+        length / self.font_size * self.units_per_em
     }
 }
-
 pub trait Scaled {
-    fn scaled(self, LayoutSettings) -> FontUnit;
+    fn scaled(self, config: &LayoutSettings) -> Length<Px>;
 }
 
-impl Scaled for FontUnit {
-    fn scaled(self, config: LayoutSettings) -> FontUnit {
-        scale(self, config)
+impl Scaled for Length<Font> {
+    fn scaled(self, config: &LayoutSettings) -> Length<Px> {
+        config.scale_font_unit(self)
     }
 }
 
+impl Scaled for Length<Px> {
+    fn scaled(self, config: &LayoutSettings) -> Length<Px> {
+        self
+    }
+}
+impl Scaled for Length<Em> {
+    fn scaled(self, config: &LayoutSettings) -> Length<Px> {
+        self * config.font_size
+    }
+}
 impl Scaled for Unit {
-    fn scaled(self, config: LayoutSettings) -> FontUnit {
+    fn scaled(self, config: &LayoutSettings) -> Length<Px> {
         match self {
-            Unit::Font(size) => scale(FontUnit::from(size), config),
-            Unit::Em(size) =>
-                scale(constants::UNITS_PER_EM * FontUnit::from(size), config),
-            Unit::Px(size) => {
-                // We need to convert from Pixels back to font units
-                let unit = FontUnit::from(size)
-                    / constants::UNITS_PER_EM
-                    / config.font_size;
-                scale(FontUnit::from(unit), config)
-            }
-            _ => panic!("unsupported unit")
+            Unit::Em(em) => Length::new(em, Em) * config.font_size,
+            Unit::Px(px) => Length::new(px, Px)
         }
     }
 }

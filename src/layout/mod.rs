@@ -21,21 +21,21 @@ mod convert;
 pub mod engine;
 pub mod spacing;
 
-use parser::color::RGBA;
-use font::constants;
-use font::FontUnit;
+use crate::parser::color::RGBA;
+use crate::font::{FontContext, MathConstants};
 use std::ops::Deref;
 use std::fmt;
 use std::cmp::{max, min};
+use crate::dimensions::*;
 
 // By default this will act as a horizontal box
 #[derive(Clone, Debug, Default)]
 pub struct Layout {
     pub contents: Vec<LayoutNode>,
-    pub width: FontUnit,
-    pub height: FontUnit,
-    pub depth: FontUnit,
-    pub offset: FontUnit,
+    pub width: Length<Px>,
+    pub height: Length<Px>,
+    pub depth: Length<Px>,
+    pub offset: Length<Px>,
     pub alignment: Alignment,
 }
 
@@ -64,7 +64,7 @@ impl Layout {
         self.contents.push(node);
     }
 
-    pub fn set_offset(&mut self, offset: FontUnit) {
+    pub fn set_offset(&mut self, offset: Length<Px>) {
         self.offset = offset;
     }
 
@@ -74,7 +74,7 @@ impl Layout {
         self
     }
 
-    pub fn centered(mut self, new_width: FontUnit) -> Layout {
+    pub fn centered(mut self, new_width: Length<Px>) -> Layout {
         self.alignment = Alignment::Centered(self.width);
         self.width = new_width;
         self
@@ -91,9 +91,9 @@ impl Layout {
 #[derive(Clone)]
 pub struct LayoutNode {
     pub node: LayoutVariant,
-    pub width: FontUnit,
-    pub height: FontUnit,
-    pub depth: FontUnit,
+    pub width: Length<Px>,
+    pub height: Length<Px>,
+    pub depth: Length<Px>,
 }
 
 #[derive(Clone)]
@@ -115,31 +115,31 @@ pub struct ColorChange {
 #[derive(Clone, Default)]
 pub struct HorizontalBox {
     pub contents: Vec<LayoutNode>,
-    pub offset: FontUnit,
+    pub offset: Length<Px>,
     pub alignment: Alignment,
 }
 
 #[derive(Clone, Default)]
 pub struct VerticalBox {
     pub contents: Vec<LayoutNode>,
-    pub offset: FontUnit,
+    pub offset: Length<Px>,
     pub alignment: Alignment,
 }
 
 #[derive(Clone, Copy)]
 pub struct LayoutGlyph {
-    pub unicode: u32,
-    pub scale: FontUnit,
-    pub offset: FontUnit,
-    pub attachment: FontUnit,
-    pub italics: FontUnit,
+    pub gid: u16,
+    pub scale: f64,
+    pub offset: Length<Px>,
+    pub attachment: Length<Px>,
+    pub italics: Length<Px>,
 }
 
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Alignment {
-    Centered(FontUnit),
-    Right(FontUnit),
+    Centered(Length<Px>),
+    Right(Length<Px>),
     Left,
     Inherit,
     Default,
@@ -167,7 +167,7 @@ impl Deref for VerticalBox {
 
 impl fmt::Debug for VerticalBox {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.offset == FontUnit::from(0) {
+        if self.offset.is_zero() {
             write!(f, "VerticalBox({:?})", self.contents)
         } else {
             write!(f,
@@ -186,7 +186,7 @@ impl fmt::Debug for HorizontalBox {
 
 impl fmt::Debug for LayoutGlyph {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "LayoutGlyph(0x{:X})", self.unicode)
+        write!(f, "LayoutGlyph({})", self.gid)
     }
 }
 
@@ -198,7 +198,7 @@ impl fmt::Debug for LayoutNode {
             LayoutVariant::Glyph(ref gly) => write!(f, "Glyph({:?})", gly),
             LayoutVariant::Rule => write!(f, "Rule()"),
             LayoutVariant::Kern => {
-                let kern = if self.width == FontUnit::from(0) {
+                let kern = if self.width.is_zero() {
                     self.height
                 } else {
                     self.width
@@ -215,8 +215,8 @@ impl LayoutNode {
     /// Center the vertical about the axis.
     /// For now this ignores offsets if already applied,
     /// and will break if there already are offsets.
-    fn centered(mut self, axis: FontUnit) -> LayoutNode {
-        let shift = (self.height + self.depth) / 2 - axis;
+    fn centered(mut self, axis: Length<Px>) -> LayoutNode {
+        let shift = (self.height + self.depth) * 0.5 - axis;
 
         match self.node {
             LayoutVariant::VerticalBox(ref mut vb) => {
@@ -255,6 +255,7 @@ pub fn is_symbol(contents: &[LayoutNode]) -> Option<LayoutGlyph> {
 /// Display styles which are used in scaling glyphs.  The associated
 /// methods are taken from pg.441 from the TeXBook
 #[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Style {
     ScriptScriptCramped,
@@ -307,28 +308,12 @@ impl Style {
         }
     }
 
-    fn font_scale(self) -> FontUnit {
-        use font::constants;
-        match self {
-            Style::Display | Style::DisplayCramped | Style::Text | Style::TextCramped => {
-                FontUnit::from(1)
-            }
-            Style::Script | Style::ScriptCramped => {
-                FontUnit::from(constants::SCRIPT_PERCENT_SCALE_DOWN)
-            }
-            Style::ScriptScript |
-            Style::ScriptScriptCramped => {
-                FontUnit::from(constants::SCRIPT_SCRIPT_PERCENT_SCALE_DOWN)
-            }
-        }
-    }
-
-    fn sup_shift_up(self) -> FontUnit {
+    fn sup_shift_up(self, config: &LayoutSettings) -> Length<Em> {
         match self {
             Style::Display | Style::Text | Style::Script | Style::ScriptScript => {
-                constants::SUPERSCRIPT_SHIFT_UP
+                config.constants.superscript_shift_up
             }
-            _ => constants::SUPERSCRIPT_SHIFT_UP_CRAMPED,
+            _ => config.constants.superscript_shift_up_cramped
         }
     }
 
@@ -355,56 +340,186 @@ impl Style {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct LayoutSettings {
-    pub font_size: u16,
-    pub style: Style,
+#[derive(Clone)]
+pub struct Constants {
+    pub subscript_shift_down: Length<Em>,
+    pub subscript_top_max: Length<Em>,
+    pub subscript_baseline_drop_min: Length<Em>,
+
+    pub superscript_baseline_drop_max: Length<Em>,
+    pub superscript_bottom_min: Length<Em>,
+    pub superscript_shift_up_cramped: Length<Em>,
+    pub superscript_shift_up: Length<Em>,
+    pub sub_superscript_gap_min: Length<Em>,
+
+    pub upper_limit_baseline_rise_min: Length<Em>,
+    pub upper_limit_gap_min: Length<Em>,
+    pub lower_limit_gap_min: Length<Em>,
+    pub lower_limit_baseline_drop_min: Length<Em>,
+
+    pub fraction_rule_thickness: Length<Em>,
+    pub fraction_numerator_display_style_shift_up: Length<Em>,
+    pub fraction_denominator_display_style_shift_down: Length<Em>,
+    pub fraction_num_display_style_gap_min: Length<Em>,
+    pub fraction_denom_display_style_gap_min: Length<Em>,
+    pub fraction_numerator_shift_up: Length<Em>,
+    pub fraction_denominator_shift_down: Length<Em>,
+    pub fraction_numerator_gap_min: Length<Em>,
+    pub fraction_denominator_gap_min: Length<Em>,
+
+    pub axis_height: Length<Em>,
+    pub accent_base_height: Length<Em>,
+
+    pub delimited_sub_formula_min_height: Length<Em>,
+    pub display_operator_min_height: Length<Em>,
+
+    pub radical_display_style_vertical_gap: Length<Em>,
+    pub radical_vertical_gap: Length<Em>,
+    pub radical_rule_thickness: Length<Em>,
+    pub radical_extra_ascender: Length<Em>,
+
+    pub stack_display_style_gap_min: Length<Em>,
+    pub stack_top_display_style_shift_up: Length<Em>,
+    pub stack_top_shift_up: Length<Em>,
+    pub stack_bottom_shift_down: Length<Em>,
+    pub stack_gap_min: Length<Em>,
+
+    pub delimiter_factor: f64,
+    pub delimiter_short_fall: Length<Em>,
+    pub null_delimiter_space: Length<Em>,
+
+    pub script_percent_scale_down: f64,
+    pub script_script_percent_scale_down: f64,
 }
 
-impl LayoutSettings {
-    fn cramped(self) -> LayoutSettings {
+impl Constants {
+    pub fn new(math: &MathConstants, font_size: Scale<Px, Em>, font_units_to_em: Scale<Em, Font>) -> Self {
+        let em = |v: f64| -> Length<Em> { Length::new(v, Font) * font_units_to_em };
+        let font = |v: f64| Length::new(v, Font);
+
+        Constants {
+            subscript_shift_down: em(math.subscript_top_max.value.into()),
+            subscript_top_max: em(math.subscript_top_max.value.into()),
+            subscript_baseline_drop_min: em(math.subscript_baseline_drop_min.value.into()),
+            
+            superscript_baseline_drop_max: em(math.superscript_baseline_drop_max.value.into()),
+            superscript_bottom_min: em(math.superscript_bottom_min.value.into()),
+            superscript_shift_up_cramped: em(math.superscript_shift_up_cramped.value.into()),
+            superscript_shift_up: em(math.superscript_shift_up.value.into()),
+            sub_superscript_gap_min: em(math.sub_superscript_gap_min.value.into()),
+
+            upper_limit_baseline_rise_min: em(math.upper_limit_baseline_rise_min.value.into()),
+            upper_limit_gap_min: em(math.upper_limit_gap_min.value.into()),
+            lower_limit_gap_min: em(math.lower_limit_gap_min.value.into()),
+            lower_limit_baseline_drop_min: em(math.lower_limit_baseline_drop_min.value.into()),
+
+            fraction_rule_thickness: em(math.fraction_rule_thickness.value.into()),
+            fraction_numerator_display_style_shift_up: em(math.fraction_numerator_display_style_shift_up.value.into()),
+            fraction_denominator_display_style_shift_down: em(math.fraction_denominator_display_style_shift_down.value.into()),
+            fraction_num_display_style_gap_min: em(math.fraction_num_display_style_gap_min.value.into()),
+            fraction_denom_display_style_gap_min: em(math.fraction_denom_display_style_gap_min.value.into()),
+            fraction_numerator_shift_up: em(math.fraction_numerator_shift_up.value.into()),
+            fraction_denominator_shift_down: em(math.fraction_denominator_shift_down.value.into()),
+            fraction_numerator_gap_min: em(math.fraction_numerator_gap_min.value.into()),
+            fraction_denominator_gap_min: em(math.fraction_denominator_gap_min.value.into()),
+
+            axis_height: em(math.axis_height.value.into()),
+            accent_base_height: em(math.accent_base_height.value.into()),
+
+            delimited_sub_formula_min_height: em(math.delimited_sub_formula_min_height.into()),
+
+            display_operator_min_height: em(math.display_operator_min_height.into()),
+
+            radical_display_style_vertical_gap: em(math.radical_display_style_vertical_gap.value.into()),
+            radical_vertical_gap: em(math.radical_vertical_gap.value.into()),
+            radical_rule_thickness: em(math.radical_rule_thickness.value.into()),
+            radical_extra_ascender: em(math.radical_extra_ascender.value.into()),
+
+            stack_display_style_gap_min: em(math.stack_display_style_gap_min.value.into()),
+            stack_top_display_style_shift_up: em(math.stack_top_display_style_shift_up.value.into()),
+            stack_top_shift_up: em(math.stack_top_shift_up.value.into()),
+            stack_bottom_shift_down: em(math.stack_bottom_shift_down.value.into()),
+            stack_gap_min: em(math.stack_gap_min.value.into()),
+
+            delimiter_factor: 0.901,
+            delimiter_short_fall: Length::new(0.1, Em),
+            null_delimiter_space: Length::new(0.1, Em),
+
+            script_percent_scale_down: 0.01 * math.script_percent_scale_down.into(),
+            script_script_percent_scale_down: 0.01 * math.script_script_percent_scale_down.into(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct LayoutSettings<'a> {
+    pub ctx: FontContext<'a>,
+    pub constants: Constants,
+    pub font_size: Scale<Px, Em>,
+    pub style: Style,
+    pub units_per_em: Scale<Font, Em>,
+    pub font_units_to_world: Scale<Px, Font>,
+}
+
+impl<'a> LayoutSettings<'a> {
+    pub fn new(ctx: FontContext<'a>, font_size: Scale<Px, Em>, style: Style) -> Self {
+        use font::Font;
+        let font_units_to_em = Scale::new(ctx.font.font_matrix().matrix.m11() as f64, Em, Font);
+        let units_per_em = font_units_to_em.inv();
+        let constants = Constants::new(&ctx.math.constants, font_size, font_units_to_em);
+        LayoutSettings {
+            ctx,
+            constants,
+            font_size,
+            style,
+            units_per_em,
+            font_units_to_world: font_size / units_per_em
+        }
+    }
+
+    fn cramped(self) -> Self {
         LayoutSettings {
             style: self.style.cramped(),
             ..self
         }
     }
 
-    fn superscript_variant(self) -> LayoutSettings {
+    fn superscript_variant(self) -> Self {
         LayoutSettings {
             style: self.style.superscript_variant(),
             ..self
         }
     }
 
-    fn subscript_variant(self) -> LayoutSettings {
+    fn subscript_variant(self) -> Self {
         LayoutSettings {
             style: self.style.subscript_variant(),
             ..self
         }
     }
 
-    fn numerator(self) -> LayoutSettings {
+    fn numerator(self) -> Self {
         LayoutSettings {
             style: self.style.numerator(),
             ..self
         }
     }
 
-    fn denominator(self) -> LayoutSettings {
+    fn denominator(self) -> Self {
         LayoutSettings {
             style: self.style.denominator(),
             ..self
         }
     }
 
-    fn with_display(self) -> LayoutSettings {
+    fn with_display(self) -> Self {
         LayoutSettings {
             style: Style::Display,
             ..self
         }
     }
 
-    fn with_text(self) -> LayoutSettings {
+    fn with_text(self) -> Self {
         LayoutSettings {
             style: Style::Text,
             ..self

@@ -1,15 +1,11 @@
-use dimensions::Unit;
-use error::{Error, Result};
-use font::Style;
-use font::style::style_symbol;
-use font::Symbol;
-use font::symbols::SYMBOLS;
-use lexer::{Lexer, Token};
-use parser::nodes::{Delimited, ParseNode, Accent, Scripts};
-use parser::color::RGBA;
-use font::AtomType;
-use functions::COMMANDS;
-use environments::Environment;
+use crate::error::{Error, Result};
+use crate::font::{Style, style_symbol, AtomType, Symbol};
+use crate::lexer::{Lexer, Token};
+use crate::parser::nodes::{Delimited, ParseNode, Accent, Scripts};
+use crate::parser::color::RGBA;
+use crate::functions::get_command;
+use crate::environments::Environment;
+use crate::dimensions::*;
 
 pub fn expression_until_opt(lex: &mut Lexer, local: Style, end: Option<Token>) -> Result<Vec<ParseNode>> {
     let mut ml: Vec<ParseNode> = Vec::new();
@@ -136,7 +132,7 @@ fn postfix(lex: &mut Lexer,
 /// Theses commands may change the state of the parser.  This includes
 /// font style and weight changes.
 pub fn state_change(lex: &mut Lexer, style: Style) -> Result<Option<Vec<ParseNode>>> {
-    use font::Family;
+    use crate::font::Family;
     if let Token::Command(cmd) = lex.current {
         let new_style = match cmd {
             "mathbf" => style.with_bold(),
@@ -164,7 +160,7 @@ pub fn state_change(lex: &mut Lexer, style: Style) -> Result<Option<Vec<ParseNod
 /// This function can error while parsing macro arguments.
 pub fn command(lex: &mut Lexer, local: Style) -> Result<Option<ParseNode>> {
     if let Token::Command(cmd) = lex.current {
-        match COMMANDS.get(cmd) {
+        match get_command(cmd) {
             Some(ref cmd) => {
                 lex.next();
                 cmd.parse(lex, local).map(Some)
@@ -242,13 +238,13 @@ pub fn group(lex: &mut Lexer, local: Style) -> Result<Option<ParseNode>> {
 pub fn symbol(lex: &mut Lexer, local: Style) -> Result<Option<ParseNode>> {
     match lex.current {
         Token::Command(cs) => {
-            if let Some(sym) = SYMBOLS.get(cs).cloned() {
+            if let Some(sym) = Symbol::from_name(cs) {
                 lex.next();
                 if sym.atom_type == AtomType::Accent {
                     let nucleus = required_argument(lex, local)?;
                     Ok(Some(accent!(sym, nucleus)))
                 } else {
-                    Ok(Some(symbol!(style_symbol(sym.unicode, local), sym.atom_type)))
+                    Ok(Some(symbol!(style_symbol(sym.codepoint, local), sym.atom_type)))
                 }
             } else {
                 Ok(None)
@@ -259,7 +255,7 @@ pub fn symbol(lex: &mut Lexer, local: Style) -> Result<Option<ParseNode>> {
                 None => Ok(None),
                 Some(sym) => {
                     lex.next();
-                    Ok(Some(symbol!(style_symbol(c as u32, local), sym)))
+                    Ok(Some(symbol!(style_symbol(c, local), sym)))
                 }
             }
         }
@@ -374,7 +370,7 @@ pub fn dimension(_: &mut Lexer, _: Style) -> Result<Unit> {
 // TODO: implement parsing for other formats.
 pub fn color(lex: &mut Lexer, _: Style) -> Result<RGBA> {
     let color_str = lex.alphanumeric();
-    let color = ::parser::color::COLOR_MAP
+    let color = crate::parser::color::COLOR_MAP
         .get(color_str)
         .ok_or_else(|| Error::UnrecognizedColor(color_str.into()))?;
     Ok(*color)
@@ -403,7 +399,7 @@ pub fn parse(input: &str) -> Result<Vec<ParseNode>> {
 /// negatives when used for other things.
 fn codepoint_atom_type(codepoint: char) -> Option<AtomType> {
     Some(match codepoint {
-             'a'...'z' | 'A'...'Z' | '0'...'9' | 'Α'...'Ω' | 'α'...'ω' => AtomType::Alpha,
+             'a' ..= 'z' | 'A' ..= 'Z' | '0' ..= '9' | 'Α' ..= 'Ω' | 'α' ..= 'ω' => AtomType::Alpha,
              '*' | '+' | '-' => AtomType::Binary,
              '[' | '(' => AtomType::Open,
              ']' | ')' | '?' | '!' => AtomType::Close,

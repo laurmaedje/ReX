@@ -1,24 +1,18 @@
-pub mod svg;
-pub use self::svg::SVGRenderer;
+use serde::{Serialize, Deserialize};
 
-use error::Error;
-use font::FontUnit;
-use dimensions::Float;
-use layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings};
-use parser::parse;
-use parser::color::RGBA;
-use layout::engine::layout;
+use crate::error::Error;
+use crate::font::FontContext;
+use crate::dimensions::*;
+use crate::layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings, Layout};
+use crate::parser::{parse, color::RGBA};
 
 const HBOX_COLOR: &str = "blue";
 const VBOX_COLOR: &str = "red";
 const GLYPH_COLOR: &str = "green";
 
-#[derive(Clone)]
-pub struct RenderSettings {
-    pub font_size: u16,
-    pub font_src: String,
-    pub horz_padding: FontUnit,
-    pub vert_padding: FontUnit,
+pub struct RenderSettings<'a> {
+    pub ctx: FontContext<'a>,
+    pub font_size: Scale<Px, Em>,
     pub strict: bool,
     pub style: Style,
     pub debug: bool,
@@ -26,36 +20,36 @@ pub struct RenderSettings {
 
 #[derive(Copy, Clone, Default)]
 pub struct Cursor {
-    pub x: FontUnit,
-    pub y: FontUnit,
+    pub x: f64,
+    pub y: f64,
 }
 
 impl Cursor {
-    pub fn translate(self, dx: FontUnit, dy: FontUnit) -> Cursor {
+    pub fn translate(self, dx: f64, dy: f64) -> Cursor {
         Cursor {
             x: self.x + dx,
             y: self.y + dy,
         }
     }
-    pub fn left(self, dx: FontUnit) -> Cursor {
+    pub fn left(self, dx: f64) -> Cursor {
         Cursor {
             x: self.x - dx,
             y: self.y,
         }
     }
-    pub fn right(self, dx: FontUnit) -> Cursor {
+    pub fn right(self, dx: f64) -> Cursor {
         Cursor {
             x: self.x + dx,
             y: self.y,
         }
     }
-    pub fn up(self, dy: FontUnit) -> Cursor {
+    pub fn up(self, dy: f64) -> Cursor {
         Cursor {
             x: self.x,
             y: self.y - dy,
         }
     }
-    pub fn down(self, dy: FontUnit) -> Cursor {
+    pub fn down(self, dy: f64) -> Cursor {
         Cursor {
             x: self.x,
             y: self.y + dy,
@@ -63,17 +57,11 @@ impl Cursor {
     }
 }
 
-impl Default for RenderSettings {
-    fn default() -> Self {
+impl<'a> RenderSettings<'a> {
+    fn new(ctx: FontContext<'a>, font_size: f64) -> Self {
         RenderSettings {
-            font_size: 48,
-            font_src: "http://rex.breeden.cc/rex-xits.otf".into(),
-
-            // TODO: Think about these defaults.  The 0.250, and 0.100
-            // were taken from a default font_size of 48, and a
-            // UNITS_PER_EM of 1000.  This should probably depend on UNITS_PER_EM.
-            horz_padding: FontUnit::from(250),
-            vert_padding: FontUnit::from(100),
+            font_size: Scale::new(font_size, Px, Em),
+            ctx,
             strict: true,
             style: Style::Display,
             debug: false,
@@ -81,146 +69,104 @@ impl Default for RenderSettings {
     }
 }
 
-impl RenderSettings {
-    pub fn font_size(self, size: u16) -> Self {
-        RenderSettings {
-            font_size: size,
-            ..self
-        }
-    }
-    pub fn font_src(self, src: &str) -> Self {
-        RenderSettings {
-            font_src: src.into(),
-            ..self
-        }
-    }
-    pub fn horz_padding(self, size: FontUnit) -> RenderSettings {
-        RenderSettings {
-            horz_padding: size,
-            ..self
-        }
-    }
-    pub fn vert_padding(self, size: FontUnit) -> RenderSettings {
-        RenderSettings {
-            vert_padding: size,
-            ..self
-        }
-    }
-    pub fn style(self, style: Style) -> RenderSettings {
-        RenderSettings {
-            style: style,
-            ..self
-        }
-    }
-    pub fn debug(self, debug: bool) -> RenderSettings {
-        RenderSettings {
-            debug: debug,
-            ..self
-        }
-    }
-    pub fn layout_settings(&self) -> LayoutSettings {
-        LayoutSettings {
-            font_size: self.font_size,
-            style: self.style,
-        }
-    }
+pub trait Backend {
+    fn bbox(&mut self, _pos: Cursor, _width: f64, _height: f64, _color: &str) {}
+    fn symbol(&self, pos: Cursor, gid: u16, scale: f64);
+    fn rule(&self, pos: Cursor, width: f64, height: f64);
+    fn color(&self, color: RGBA, contents: impl FnMut(&mut Self));
 }
 
-pub trait Renderer {
-    type Out;
-    fn bbox(&self, _out: &mut Self::Out, _pos: Cursor, _width: FontUnit, _height: FontUnit, _color: &str) {}
-    fn symbol(&self, out: &mut Self::Out, pos: Cursor, symbol: u32, scale: Float);
-    fn rule(&self, out: &mut Self::Out, pos: Cursor, width: FontUnit, height: FontUnit);
-    fn color<F>(&self, out: &mut Self::Out, color: RGBA, contents: F)
-        where F: FnMut(&Self, &mut Self::Out);
-    fn render_hbox(&self,
-                   out: &mut Self::Out,
-                   mut pos: Cursor,
-                   nodes: &[LayoutNode],
-                   height: FontUnit,
-                   nodes_width: FontUnit,
-                   alignment: Alignment) {
+pub struct Renderer<'a> {
+    settings: RenderSettings<'a>,
+    layout_settings: LayoutSettings<'a>,
+}
+impl<'a> Renderer<'a> {
+    pub fn new(settings: RenderSettings<'a>) -> Self {
+        Renderer {
+            layout_settings: LayoutSettings::new(settings.ctx, settings.font_size, settings.style),
+            settings
+        }
+    }
+    pub fn size(&self, layout: &LayoutNode) -> (f64, f64) {
+        (layout.width / Px, layout.height / Px)
+    }
+    pub fn render(&self, layout: &Layout, out: &mut impl Backend) {
+        let pos = Cursor {
+            x: 0.0,
+            y: layout.height / Px,
+        };
+        self.render_hbox(out, pos, &layout.contents, layout.height / Px, layout.width / Px, Alignment::Default);
+    }
+
+    fn render_hbox(&self, out: &mut impl Backend, mut pos: Cursor, nodes: &[LayoutNode], height: f64, nodes_width: f64, alignment: Alignment) {
         if let Alignment::Centered(w) = alignment {
-            pos.x += (nodes_width - w) / 2;
+            pos.x += (nodes_width - w / Px) * 0.5;
         }
 
-        if self.settings().debug {
-            self.bbox(out, pos.up(height), nodes_width, height, HBOX_COLOR);
+        if self.settings.debug {
+            out.bbox(pos.up(height), nodes_width, height, HBOX_COLOR);
         }
 
         for node in nodes {
             match node.node {
                 LayoutVariant::Glyph(ref gly) => {
-                    if self.settings().debug {
-                        self.bbox(out, pos.up(node.height), node.width, node.height - node.depth, GLYPH_COLOR);
+                    if self.settings.debug {
+                        out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, GLYPH_COLOR);
                     }
-                    self.symbol(out, pos, gly.unicode, f64::from(gly.scale));
+                    out.symbol(pos, gly.gid, f64::from(gly.scale));
                 }
 
-                LayoutVariant::Rule => self.rule(out, pos.up(node.height), node.width, node.height),
+                LayoutVariant::Rule => out.rule(pos.up(node.height / Px), node.width / Px, node.height / Px),
 
                 LayoutVariant::VerticalBox(ref vbox) => {
-                    if self.settings().debug {
-                        self.bbox(out, pos.up(node.height), node.width, node.height - node.depth, VBOX_COLOR);
+                    if self.settings.debug {
+                        out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, VBOX_COLOR);
                     }
-                    self.render_vbox(out, pos.up(node.height), &vbox.contents);
+                    self.render_vbox(out, pos.up(node.height / Px), &vbox.contents);
                 }
 
                 LayoutVariant::HorizontalBox(ref hbox) => {
-                    self.render_hbox(out,
-                                     pos,
-                                     &hbox.contents,
-                                     node.height,
-                                     node.width,
-                                     hbox.alignment)
+                    self.render_hbox(out, pos, &hbox.contents, node.height / Px, node.width / Px, hbox.alignment);
                 }
 
                 LayoutVariant::Color(ref clr) => {
-                    self.color(out, clr.color, |r, out| {
-                        r.render_hbox(out,
-                                      pos,
-                                      &clr.inner,
-                                      node.height,
-                                      node.width,
-                                      Alignment::Default);
-                    })
+                    out.color(clr.color, |out| {
+                        self.render_hbox(out, pos, &clr.inner, node.height / Px, node.width / Px, Alignment::Default);
+                    });
                 }
 
                 LayoutVariant::Kern => { /* NOOP */ }
             } // End macth
 
-            pos.x += node.width;
+            pos.x += node.width / Px;
         }
     }
-    fn render_vbox(&self, out: &mut Self::Out, mut pos: Cursor, nodes: &[LayoutNode]) {
+    fn render_vbox(&self, out: &mut impl Backend, mut pos: Cursor, nodes: &[LayoutNode]) {
         for node in nodes {
             match node.node {
-                LayoutVariant::Rule => self.rule(out, pos, node.width, node.height),
+                LayoutVariant::Rule => out.rule(pos, node.width / Px, node.height / Px),
 
                 LayoutVariant::HorizontalBox(ref hbox) => {
                     self.render_hbox(out,
-                                     pos.down(node.height),
+                                     pos.down(node.height / Px),
                                      &hbox.contents,
-                                     node.height,
-                                     node.width,
+                                     node.height / Px,
+                                     node.width / Px,
                                      hbox.alignment)
                 }
 
                 LayoutVariant::VerticalBox(ref vbox) => {
-                    if self.settings().debug {
-                        self.bbox(out, pos, node.width, node.height - node.depth, VBOX_COLOR);
+                    if self.settings.debug {
+                        out.bbox(pos, node.width / Px, (node.height - node.depth) / Px, VBOX_COLOR);
                     }
                     self.render_vbox(out, pos, &vbox.contents);
                 }
 
                 LayoutVariant::Glyph(ref gly) => {
-                    if self.settings().debug {
-                        self.bbox(out, pos, node.width, node.height - node.depth, GLYPH_COLOR);
+                    if self.settings.debug {
+                        out.bbox(pos, node.width / Px, (node.height - node.depth) / Px, GLYPH_COLOR);
                     }
-                    self.symbol(out,
-                                pos.down(node.height),
-                                gly.unicode,
-                                f64::from(gly.scale))
+                    out.symbol(pos.down(node.height / Px), gly.gid, gly.scale);
                 }
 
                 LayoutVariant::Color(_) => panic!("Shouldn't have a color in a vertical box???"),
@@ -228,44 +174,7 @@ pub trait Renderer {
                 LayoutVariant::Kern => { /* NOOP */ }
             }
 
-            pos.y += node.height;
+            pos.y += node.height / Px;
         }
-    }
-    fn prepare(&self, _out: &mut Self::Out, _width: FontUnit, _height: FontUnit) {}
-    fn finish(&self, _out: &mut Self::Out) {}
-    fn settings(&self) -> &RenderSettings;
-    fn render_to(&self, out: &mut Self::Out, tex: &str) -> Result<(), Error> {
-        let mut parse = parse(&tex)?;
-        let layout = layout(&mut parse, self.settings().layout_settings());
-        trace!("Parse: {:?}", parse);
-        trace!("Layout: {:?}", layout);
-
-        let padding = (self.settings().horz_padding, self.settings().vert_padding);
-        self.prepare(out,
-                     // Left and right padding
-                     layout.width + 2 * padding.0,
-                     // Top and bot padding
-                     layout.height - layout.depth + 2 * padding.1);
-
-        let pos = Cursor {
-            x: padding.0,
-            y: padding.1 + layout.height,
-        };
-        self.render_hbox(out,
-                         pos,
-                         &layout.contents,
-                         layout.height,
-                         layout.width,
-                         Alignment::Default);
-
-        self.finish(out);
-        Ok(())
-    }
-    fn render(&self, tex: &str) -> Result<Self::Out, Error>
-        where Self::Out: Default
-    {
-        let mut out = Self::Out::default();
-        self.render_to(&mut out, tex)?;
-        Ok(out)
     }
 }

@@ -1,11 +1,9 @@
-use dimensions::Unit;
-use layout::Style;
-use font::Symbol;
-use error::Error;
+use crate::dimensions::{Length, Px, Unit};
+use crate::layout::Style;
+use crate::error::Error;
 use super::color::RGBA;
-use environments::Array;
-
-use font::AtomType;
+use crate::environments::Array;
+use crate::font::{Symbol, AtomType};
 
 // TODO: It might be worth letting the `Group` variant
 //   to have an atomtype associated with it.  By default,
@@ -25,7 +23,7 @@ pub enum ParseNode {
     Color(Color),
     Group(Vec<ParseNode>),
     Stack(Stack),
-    Extend(u32, Unit),
+    Extend(char, Unit),
     Array(Array),
 }
 
@@ -108,7 +106,7 @@ impl ParseNode {
     pub fn expect_left(self) -> Result<Symbol, Error> {
         if let ParseNode::Symbol(sym) = self {
             if sym.atom_type == AtomType::Open || sym.atom_type == AtomType::Fence ||
-               sym.unicode == 46 {
+               sym.codepoint == '.' {
                 return Ok(sym);
             } else {
                 return Err(Error::ExpectedOpen(sym));
@@ -121,7 +119,7 @@ impl ParseNode {
     pub fn expect_right(self) -> Result<Symbol, Error> {
         if let ParseNode::Symbol(sym) = self {
             if sym.atom_type == AtomType::Close || sym.atom_type == AtomType::Fence ||
-               sym.unicode == 46 {
+               sym.codepoint == '.' {
                 return Ok(sym);
             } else {
                 return Err(Error::ExpectedClose(sym));

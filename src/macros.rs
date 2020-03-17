@@ -90,8 +90,7 @@ macro_rules! min {
     ($x: expr) => ($x);
     ($x: expr, $($xs: expr), +) => {
         {
-            use std::cmp::min;
-            min($x, min!($($xs), +))
+            std::cmp::min($x, min!($($xs), +))
         }
     }
 }
@@ -100,20 +99,7 @@ macro_rules! max {
     ($x: expr) => ($x);
     ($x: expr, $($xs: expr), +) => {
         {
-            use std::cmp::max;
-            max($x, max!($($xs), +))
+            std::cmp::max($x, max!($($xs), +))
         }
     }
-}
-
-macro_rules! fontunit {
-    ($n:expr) => (
-        ::font::FontUnit { bits: $n << 8u8 }
-    )
-}
-
-macro_rules! fontunit_raw {
-    ($n:expr) => (
-        ::font::FontUnit { bits: $n }
-    )
 }

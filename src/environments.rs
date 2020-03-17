@@ -1,13 +1,7 @@
-use lexer::Lexer;
-use lexer::Token;
-use font::Style;
-use parser;
-use parser::optional_argument_with;
-use parser::required_argument_with;
-use parser::ParseNode;
-use error::{Result, Error};
-use font::Symbol;
-use font::AtomType;
+use crate::lexer::{Lexer, Token};
+use crate::font::{Style, Symbol, AtomType};
+use crate::parser::{self, optional_argument_with, required_argument_with, ParseNode};
+use crate::error::{Result, Error};
 
 /// An enumeration of recognized enviornmnets.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -153,14 +147,14 @@ fn matrix_common(lex: &mut Lexer,
     let body = array_body(lex, style)?;
     let left_delimiter = left_delimiter.map(|code| {
                                                 Symbol {
-                                                    unicode: code as u32,
+                                                    codepoint: code,
                                                     atom_type: AtomType::Inner,
                                                 }
                                             });
 
     let right_delimiter = right_delimiter.map(|code| {
                                                   Symbol {
-                                                      unicode: code as u32,
+                                                      codepoint: code,
                                                       atom_type: AtomType::Inner,
                                                   }
                                               });

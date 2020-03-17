@@ -25,7 +25,7 @@ macro_rules! symbol {
     ($codepoint:expr, $atom:expr) => (
         ParseNode::Symbol(
             Symbol {
-                unicode: $codepoint,
+                codepoint: $codepoint,
                 atom_type: $atom,
             }
         )
