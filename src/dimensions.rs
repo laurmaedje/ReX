@@ -97,12 +97,6 @@ pub struct Em;
 macro_rules! impl_length {
     ($($unit:ty),*) => {
         $(
-            impl Mul<f64> for $unit {
-                type Output = Length<$unit>;
-                fn mul(self, rhs: f64) -> Length<$unit> {
-                    Length { value: rhs, _m: PhantomData }
-                }
-            }
             impl fmt::Debug for Length<$unit> {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                     write!(f, concat!("Length {{ value: {:?}, unit: ", stringify!($unit), " }}"), self.value)

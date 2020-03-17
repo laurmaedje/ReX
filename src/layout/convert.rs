@@ -10,11 +10,11 @@ use super::{LayoutNode, LayoutVariant, LayoutGlyph};
 use crate::parser::nodes::Rule;
 
 pub trait AsLayoutNode {
-    fn as_layout(&self, config: &LayoutSettings) -> LayoutNode;
+    fn as_layout(&self, config: LayoutSettings) -> LayoutNode;
 }
 
 impl<'a> AsLayoutNode for Glyph<'a> {
-    fn as_layout(&self, config: &LayoutSettings) -> LayoutNode {
+    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
         LayoutNode {
             height: self.height().scaled(config),
             width:  self.advance.scaled(config),
@@ -31,7 +31,7 @@ impl<'a> AsLayoutNode for Glyph<'a> {
 }
 
 impl AsLayoutNode for Rule {
-    fn as_layout(&self, config: &LayoutSettings) -> LayoutNode {
+    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
         LayoutNode {
             node:   LayoutVariant::Rule,
             width:  self.width .scaled(config),
@@ -41,15 +41,15 @@ impl AsLayoutNode for Rule {
     }
 }
 
-impl<'a> AsLayoutNode for VariantGlyph<'a> {
-    fn as_layout(&self, config: &LayoutSettings) -> LayoutNode {
+impl AsLayoutNode for VariantGlyph {
+    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
         match *self {
             VariantGlyph::Replacement(gid) => {
                 let glyph = config.ctx.glyph_from_gid(gid);
                 glyph.as_layout(config)
             },
 
-            VariantGlyph::Constructable(dir, parts) => {
+            VariantGlyph::Constructable(dir, ref parts) => {
                 match dir {
                     Direction::Vertical => {
                         let mut contents = builders::VBox::new();
@@ -86,6 +86,7 @@ impl<'a> AsLayoutNode for VariantGlyph<'a> {
 }
 
 impl<'a> LayoutSettings<'a> {
+    #[inline]
     fn scale_factor(&self) -> f64 {
         match self.style {
             Style::Display |
@@ -96,45 +97,52 @@ impl<'a> LayoutSettings<'a> {
 
             Style::Script |
             Style::ScriptCramped
-                => 0.01 * self.constants.script_percent_scale_down,
+                => 0.01 * self.ctx.constants.script_percent_scale_down,
 
             Style::ScriptScript |
             Style::ScriptScriptCramped
-                => 0.01 * self.constants.script_script_percent_scale_down,
+                => 0.01 * self.ctx.constants.script_script_percent_scale_down,
         }
     }
+    #[inline]
     fn scale_font_unit(&self, length: Length<Font>) -> Length<Px> {
-        length * self.font_units_to_world
+        length / self.ctx.units_per_em * self.font_size
     }
+    #[inline]
     fn scale_length<U>(&self, length: Length<U>) -> Length<U> {
         length * self.scale_factor()
     }
+    #[inline]
     pub fn to_font(&self, length: Length<Px>) -> Length<Font> {
-        length / self.font_size * self.units_per_em
+        length / self.font_size * self.ctx.units_per_em
     }
 }
 pub trait Scaled {
-    fn scaled(self, config: &LayoutSettings) -> Length<Px>;
+    fn scaled(self, config: LayoutSettings) -> Length<Px>;
 }
 
 impl Scaled for Length<Font> {
-    fn scaled(self, config: &LayoutSettings) -> Length<Px> {
+    #[inline]
+    fn scaled(self, config: LayoutSettings) -> Length<Px> {
         config.scale_font_unit(self)
     }
 }
 
 impl Scaled for Length<Px> {
-    fn scaled(self, config: &LayoutSettings) -> Length<Px> {
+    #[inline]
+    fn scaled(self, config: LayoutSettings) -> Length<Px> {
         self
     }
 }
 impl Scaled for Length<Em> {
-    fn scaled(self, config: &LayoutSettings) -> Length<Px> {
+    #[inline]
+    fn scaled(self, config: LayoutSettings) -> Length<Px> {
         self * config.font_size
     }
 }
 impl Scaled for Unit {
-    fn scaled(self, config: &LayoutSettings) -> Length<Px> {
+    #[inline]
+    fn scaled(self, config: LayoutSettings) -> Length<Px> {
         match self {
             Unit::Em(em) => Length::new(em, Em) * config.font_size,
             Unit::Px(px) => Length::new(px, Px)

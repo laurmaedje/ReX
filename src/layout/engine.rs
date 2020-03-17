@@ -17,16 +17,13 @@ use crate::dimensions::{*};
 use crate::layout;
 
 /// Entry point to our recursive algorithm
-pub fn layout(nodes: &[ParseNode], config: &LayoutSettings) -> Layout {
+pub fn layout(nodes: &[ParseNode], config: LayoutSettings) -> Layout {
     layout_recurse(nodes, config, AtomType::Transparent)
 }
 
 /// This method takes the parsing nodes and layouts them to layout nodes.
 #[allow(unconditional_recursion)]
-fn layout_recurse(nodes: &[ParseNode],
-                  mut config: &LayoutSettings,
-                  parent_next: AtomType)
-                  -> Layout {
+fn layout_recurse(nodes: &[ParseNode], mut config: LayoutSettings, parent_next: AtomType) -> Layout {
     let mut layout = Layout::new();
     let mut prev = AtomType::Transparent;
 
@@ -64,21 +61,21 @@ fn layout_recurse(nodes: &[ParseNode],
         prev = current;
         match *node {
             ParseNode::Style(sty) => config.style = sty,
-            _ => layout.dispatch(config, node, next),
+            _ => layout.dispatch(config.clone(), node, next),
         }
     }
 
     layout.finalize()
 }
 
-fn layout_node(node: &ParseNode, config: &LayoutSettings) -> Layout {
+fn layout_node(node: &ParseNode, config: LayoutSettings) -> Layout {
     let mut layout = Layout::new();
     layout.dispatch(config, node, AtomType::Transparent);
     layout.finalize()
 }
 
 impl Layout {
-    fn dispatch(&mut self, config: &LayoutSettings, node: &ParseNode, next: AtomType) {
+    fn dispatch(&mut self, config: LayoutSettings, node: &ParseNode, next: AtomType) {
         match *node {
             ParseNode::Symbol(sym) => self.symbol(sym, config),
             ParseNode::Scripts(ref script) => self.scripts(script, config),
@@ -103,7 +100,7 @@ impl Layout {
         }
     }
 
-    fn symbol(&mut self, sym: Symbol, config: &LayoutSettings) {
+    fn symbol(&mut self, sym: Symbol, config: LayoutSettings) {
         // Operators are handled specially.  We may need to find a larger
         // symbol and vertical center it.
         if let AtomType::Operator(_) = sym.atom_type {
@@ -114,12 +111,12 @@ impl Layout {
         }
     }
 
-    fn largeop(&mut self, sym: Symbol, config: &LayoutSettings) {
+    fn largeop(&mut self, sym: Symbol, config: LayoutSettings) {
         let glyph = config.ctx.glyph(sym.codepoint);
         if config.style > Style::Text {
-            let axis_offset = config.constants.axis_height.scaled(config);
+            let axis_offset = config.ctx.constants.axis_height.scaled(config);
             let largeop = glyph
-                .vert_variant(config.constants.display_operator_min_height * config.units_per_em)
+                .vert_variant(config.ctx.constants.display_operator_min_height * config.ctx.units_per_em)
                 .as_layout(config);
             let shift = (largeop.height + largeop.depth) * 0.5 - axis_offset;
             self.add_node(vbox!(offset: shift; largeop));
@@ -128,12 +125,12 @@ impl Layout {
         }
     }
 
-    fn accent(&mut self, acc: &Accent, config: &LayoutSettings) {
+    fn accent(&mut self, acc: &Accent, config: LayoutSettings) {
         // [ ] The width of the selfing box is the width of the base.
         // [ ] Bottom accents: vertical placement is directly below nucleus,
         //       no correction takes place.
         // [ ] WideAccent vs Accent: Don't expand Accent types.
-        let base = layout(&acc.nucleus, &config.cramped());
+        let base = layout(&acc.nucleus, config.cramped());
         let accent_variant = config.ctx.glyph(acc.symbol.codepoint).horz_variant(config.to_font(base.width));
         let accent = accent_variant.as_layout(config);
 
@@ -173,7 +170,7 @@ impl Layout {
 
         // Do not place the accent any further than you would if given
         // an `x` character in the current style.
-        let delta = -min(base.height, config.constants.accent_base_height.scaled(config));
+        let delta = -min(base.height, config.ctx.constants.accent_base_height.scaled(config));
 
         // By not placing an offset on this vbox, we are assured that the
         // baseline will match the baseline of `base.as_node()`
@@ -182,21 +179,21 @@ impl Layout {
                             base.as_node()));
     }
 
-    fn delimited(&mut self, delim: &Delimited, config: &LayoutSettings) {
+    fn delimited(&mut self, delim: &Delimited, config: LayoutSettings) {
         let inner = layout(&delim.inner, config).as_node();
 
-        let min_height = config.constants.delimited_sub_formula_min_height * config.font_size;
-        let null_delimiter_space = config.constants.null_delimiter_space * config.font_size;
+        let min_height = config.ctx.constants.delimited_sub_formula_min_height * config.font_size;
+        let null_delimiter_space = config.ctx.constants.null_delimiter_space * config.font_size;
 
         // Only extend if we meet a certain size
         // TODO: This quick height check doesn't seem to be strong enough,
         // reference: http://tug.org/pipermail/luatex/2010-July/001745.html
         if max(inner.height, -inner.depth) > min_height * 0.5 {
-            let axis = config.constants.axis_height * config.font_size;
+            let axis = config.ctx.constants.axis_height * config.font_size;
 
             let clearance = max(inner.height - axis, axis - inner.depth) * 2.0;
-            let clearance = max(clearance * config.constants.delimiter_factor,
-                            inner.height - inner.depth - config.constants.delimiter_short_fall * config.font_size);
+            let clearance = max(clearance * config.ctx.constants.delimiter_factor,
+                            inner.height - inner.depth - config.ctx.constants.delimiter_short_fall * config.font_size);
             let clearance = config.to_font(clearance);
 
             let left = match delim.left.codepoint {
@@ -239,7 +236,7 @@ impl Layout {
         }
     }
 
-    fn scripts(&mut self, scripts: &Scripts, config: &LayoutSettings) {
+    fn scripts(&mut self, scripts: &Scripts, config: LayoutSettings) {
         // See: https://tug.org/TUGboat/tb27-1/tb86jackowski.pdf
         //      https://www.tug.org/tugboat/tb30-1/tb94vieth.pdf
         let base = match scripts.base {
@@ -248,12 +245,12 @@ impl Layout {
         };
 
         let mut sup = match scripts.superscript {
-            Some(ref sup) => layout(sup, &config.superscript_variant()),
+            Some(ref sup) => layout(sup, config.superscript_variant()),
             None => Layout::new(),
         };
 
         let mut sub = match scripts.subscript {
-            Some(ref sub) => layout(sub, &config.subscript_variant()),
+            Some(ref sub) => layout(sub, config.subscript_variant()),
             None => Layout::new(),
         };
 
@@ -275,9 +272,9 @@ impl Layout {
 
         if scripts.superscript.is_some() {
             // Use default font values for first iteration of vertical height.
-            let adjust_up = match config.style.is_cramped() {
-                true => config.constants.superscript_shift_up_cramped,
-                false => config.constants.superscript_shift_up,
+            adjust_up = match config.style.is_cramped() {
+                true => config.ctx.constants.superscript_shift_up_cramped,
+                false => config.ctx.constants.superscript_shift_up,
             }
             .scaled(config);
 
@@ -299,7 +296,7 @@ impl Layout {
                         if let Some(sup_sym) = sup.is_symbol() {
                             let bg = config.ctx.glyph_from_gid(base_sym.gid);
                             let sg = config.ctx.glyph_from_gid(sup_sym.gid);
-                            let kern = superscript_kern(bg, sg, config.to_font(adjust_up)).scaled(config);
+                            let kern = superscript_kern(&bg, &sg, config.to_font(adjust_up)).scaled(config);
                             sup_kern = base_sym.italics + kern;
                         } else {
                             sup_kern = base_sym.italics;
@@ -308,19 +305,19 @@ impl Layout {
                 }
             }
 
-            let drop_max = config.constants.superscript_baseline_drop_max.scaled(config);
+            let drop_max = config.ctx.constants.superscript_baseline_drop_max.scaled(config);
             adjust_up = max!(adjust_up,
                             height - drop_max,
-                            config.constants.superscript_bottom_min.scaled(config) - sup.depth);
+                            config.ctx.constants.superscript_bottom_min.scaled(config) - sup.depth);
         }
 
         // We calculate the vertical position of the subscripts.  The `adjust_down`
         // variable will describe how far we need to adjust the subscript down.
         if scripts.subscript.is_some() {
             // Use default font values for first iteration of vertical height.
-            adjust_down = max!(config.constants.subscript_shift_down.scaled(config),
-                                sub.height - config.constants.subscript_top_max.scaled(config),
-                                config.constants.subscript_baseline_drop_min.scaled(config) - base.depth);
+            adjust_down = max!(config.ctx.constants.subscript_shift_down.scaled(config),
+                                sub.height - config.ctx.constants.subscript_top_max.scaled(config),
+                                config.ctx.constants.subscript_baseline_drop_min.scaled(config) - base.depth);
 
             // Provided that the base and subscript are symbols, we apply
             // kerning values found in the kerning font table
@@ -336,7 +333,7 @@ impl Layout {
                 if let (Some(ssym), Some(bsym)) = (sub.is_symbol(), base.is_symbol()) {
                     let bg = config.ctx.glyph_from_gid(bsym.gid);
                     let sg = config.ctx.glyph_from_gid(ssym.gid);
-                    sub_kern += subscript_kern(bg, sg, config.to_font(adjust_down)).scaled(config);
+                    sub_kern += subscript_kern(&bg, &sg, config.to_font(adjust_down)).scaled(config);
                 }
             }
         }
@@ -345,7 +342,7 @@ impl Layout {
         if scripts.subscript.is_some() && scripts.superscript.is_some() {
             let sup_bot = adjust_up + sup.depth;
             let sub_top = sub.height - adjust_down;
-            let gap_min = config.constants.sub_superscript_gap_min.scaled(config);
+            let gap_min = config.ctx.constants.sub_superscript_gap_min.scaled(config);
             if sup_bot - sub_top < gap_min {
                 let adjust = (gap_min - sup_bot + sub_top) * 0.5;
                 adjust_up += adjust;
@@ -378,11 +375,7 @@ impl Layout {
         self.add_node(contents.build());
     }
 
-    fn operator_limits(&mut self,
-                    base: Layout,
-                    sup: Layout,
-                    sub: Layout,
-                    config: &LayoutSettings) {
+    fn operator_limits(&mut self, base: Layout, sup: Layout, sub: Layout, config: LayoutSettings) {
         // Provided that the operator is a simple symbol, we need to account
         // for the italics correction of the symbol.  This how we "center"
         // the superscript and subscript of the limits.
@@ -393,10 +386,10 @@ impl Layout {
 
         // Next we calculate the kerning required to separate the superscript
         // and subscript (respectively) from the base.
-        let sup_kern = max(config.constants.upper_limit_baseline_rise_min.scaled(config),
-                        config.constants.upper_limit_gap_min.scaled(config) - sup.depth);
-        let sub_kern = max(config.constants.lower_limit_gap_min.scaled(config),
-                        config.constants.lower_limit_baseline_drop_min.scaled(config) - sub.height) -
+        let sup_kern = max(config.ctx.constants.upper_limit_baseline_rise_min.scaled(config),
+                        config.ctx.constants.upper_limit_gap_min.scaled(config) - sup.depth);
+        let sub_kern = max(config.ctx.constants.lower_limit_gap_min.scaled(config),
+                        config.ctx.constants.lower_limit_baseline_drop_min.scaled(config) - sub.height) -
                     base.depth;
 
         // We need to preserve the baseline of the operator when
@@ -429,22 +422,21 @@ impl Layout {
         ]);
     }
 
-    fn frac(&mut self, frac: &GenFraction, config: &LayoutSettings) {
+    fn frac(&mut self, frac: &GenFraction, config: LayoutSettings) {
         let config = match frac.style {
             MathStyle::NoChange => config.clone(),
             MathStyle::Display => config.with_display(),
             MathStyle::Text => config.with_text(),
         };
-        let config = &config;
 
         let bar = match frac.bar_thickness {
-            BarThickness::Default => config.constants.fraction_rule_thickness.scaled(config),
+            BarThickness::Default => config.ctx.constants.fraction_rule_thickness.scaled(config),
             BarThickness::None => Length::zero(),
             BarThickness::Unit(u) => u.scaled(config),
         };
 
-        let mut n = layout(&frac.numerator, &config.numerator());
-        let mut d = layout(&frac.denominator, &config.denominator());
+        let mut n = layout(&frac.numerator, config.numerator());
+        let mut d = layout(&frac.denominator, config.denominator());
 
         if n.width > d.width {
             d.alignment = Alignment::Centered(d.width);
@@ -457,22 +449,22 @@ impl Layout {
         let numer = n.as_node();
         let denom = d.as_node();
 
-        let axis = config.constants.axis_height.scaled(config);
+        let axis = config.ctx.constants.axis_height.scaled(config);
         let shift_up;
         let shift_down;
         let gap_num;
         let gap_denom;
 
         if config.style > Style::Text {
-            shift_up = config.constants.fraction_numerator_display_style_shift_up.scaled(config);
-            shift_down = config.constants.fraction_denominator_display_style_shift_down.scaled(config);
-            gap_num = config.constants.fraction_num_display_style_gap_min.scaled(config);
-            gap_denom = config.constants.fraction_denom_display_style_gap_min.scaled(config);
+            shift_up = config.ctx.constants.fraction_numerator_display_style_shift_up.scaled(config);
+            shift_down = config.ctx.constants.fraction_denominator_display_style_shift_down.scaled(config);
+            gap_num = config.ctx.constants.fraction_num_display_style_gap_min.scaled(config);
+            gap_denom = config.ctx.constants.fraction_denom_display_style_gap_min.scaled(config);
         } else {
-            shift_up = config.constants.fraction_numerator_shift_up.scaled(config);
-            shift_down = config.constants.fraction_denominator_shift_down.scaled(config);
-            gap_num = config.constants.fraction_numerator_gap_min.scaled(config);
-            gap_denom = config.constants.fraction_denominator_gap_min.scaled(config);
+            shift_up = config.ctx.constants.fraction_numerator_shift_up.scaled(config);
+            shift_down = config.ctx.constants.fraction_denominator_shift_down.scaled(config);
+            gap_num = config.ctx.constants.fraction_numerator_gap_min.scaled(config);
+            gap_denom = config.ctx.constants.fraction_denominator_gap_min.scaled(config);
         }
 
         let kern_num = max(shift_up - axis - bar * 0.5, gap_num - numer.depth);
@@ -488,14 +480,14 @@ impl Layout {
             denom
         );
 
-        let null_delimiter_space = config.constants.null_delimiter_space * config.font_size;
-        let axis_height = config.constants.axis_height * config.font_size;
+        let null_delimiter_space = config.ctx.constants.null_delimiter_space * config.font_size;
+        let axis_height = config.ctx.constants.axis_height * config.font_size;
         // Enclose fraction with delimiters if provided, otherwise with a NULL_DELIMITER_SPACE.
         let left = match frac.left_delimiter {
             None => kern!(horz: null_delimiter_space),
             Some(sym) => {
                 let clearance = max(inner.height - axis_height, axis_height - inner.depth) * 2.0;
-                let clearance = max(clearance, config.constants.delimited_sub_formula_min_height * config.font_size);
+                let clearance = max(clearance, config.ctx.constants.delimited_sub_formula_min_height * config.font_size);
 
                 config.ctx.glyph(sym.codepoint)
                     .vert_variant(config.to_font(clearance))
@@ -508,7 +500,7 @@ impl Layout {
             None => kern!(horz: null_delimiter_space),
             Some(sym) => {
                 let clearance = max(inner.height - axis_height, axis_height - inner.depth) * 2.0;
-                let clearance = max(clearance, config.constants.delimited_sub_formula_min_height * config.font_size);
+                let clearance = max(clearance, config.ctx.constants.delimited_sub_formula_min_height * config.font_size);
 
                 config.ctx.glyph(sym.codepoint)
                     .vert_variant(config.to_font(clearance))
@@ -522,19 +514,19 @@ impl Layout {
         self.add_node(right);
     }
 
-    fn radical(&mut self, rad: &Radical, config: &LayoutSettings) {
+    fn radical(&mut self, rad: &Radical, config: LayoutSettings) {
         // reference rule 11 from pg 443 of TeXBook
-        let contents = layout(&rad.inner, &config.cramped()).as_node();
+        let contents = layout(&rad.inner, config.cramped()).as_node();
 
         // obtain minimum clearange between radicand and radical bar
         // and cache other sizes that will be needed
         let gap = match config.style >= Style::Display {
-            true => config.constants.radical_display_style_vertical_gap.scaled(config),
-            false => config.constants.radical_vertical_gap.scaled(config),
+            true => config.ctx.constants.radical_display_style_vertical_gap.scaled(config),
+            false => config.ctx.constants.radical_vertical_gap.scaled(config),
         };
 
-        let rule_thickness = config.constants.radical_rule_thickness.scaled(config);
-        let rule_ascender = config.constants.radical_extra_ascender.scaled(config);
+        let rule_thickness = config.ctx.constants.radical_rule_thickness.scaled(config);
+        let rule_ascender = config.ctx.constants.radical_extra_ascender.scaled(config);
 
         // determine size of radical glyph
         let inner_height = (contents.height - contents.depth) + gap + rule_thickness;
@@ -559,7 +551,7 @@ impl Layout {
                             contents]);
     }
 
-    fn substack(&mut self, stack: &Stack, config: &LayoutSettings) {
+    fn substack(&mut self, stack: &Stack, config: LayoutSettings) {
         // Don't bother constructing a new node if there is nothing.
         if stack.lines.len() == 0 {
             return;
@@ -589,22 +581,22 @@ impl Layout {
 
         // The line gap will be taken from STACK_GAP constants
         let gap_min = if config.style > Style::Text {
-            config.constants.stack_display_style_gap_min.scaled(config)
+            config.ctx.constants.stack_display_style_gap_min.scaled(config)
         } else {
-            config.constants.stack_gap_min.scaled(config)
+            config.ctx.constants.stack_gap_min.scaled(config)
         };
 
         // No idea.
         let gap_try = if config.style > Style::Text {
-            config.constants.stack_top_display_style_shift_up
-            - config.constants.axis_height
-            + config.constants.stack_bottom_shift_down
-            - config.constants.accent_base_height * 2.0
+            config.ctx.constants.stack_top_display_style_shift_up
+            - config.ctx.constants.axis_height
+            + config.ctx.constants.stack_bottom_shift_down
+            - config.ctx.constants.accent_base_height * 2.0
         } else {
-            config.constants.stack_top_shift_up
-            - config.constants.axis_height
-            + config.constants.stack_bottom_shift_down
-            - config.constants.accent_base_height * 2.0
+            config.ctx.constants.stack_top_shift_up
+            - config.ctx.constants.axis_height
+            + config.ctx.constants.stack_bottom_shift_down
+            - config.ctx.constants.accent_base_height * 2.0
         }
         .scaled(config);
 
@@ -623,12 +615,12 @@ impl Layout {
         }
 
         // Vertically center the stack to the axis
-        let offset = (vbox.height + vbox.depth) * 0.5 - config.constants.axis_height.scaled(config);
+        let offset = (vbox.height + vbox.depth) * 0.5 - config.ctx.constants.axis_height.scaled(config);
         vbox.set_offset(offset);
         self.add_node(vbox.build());
     }
 
-    fn array(&mut self, array: &Array, config: &LayoutSettings) {
+    fn array(&mut self, array: &Array, config: LayoutSettings) {
         // TODO: let jot = UNITS_PER_EM / 4;
         let strut_height = Length::new(0.7, Em) * config.font_size; // \strutbox height = 0.7\baseline
         let strut_depth = Length::new(0.3, Em) * config.font_size; // \strutbox depth  = 0.3\baseline
@@ -684,7 +676,7 @@ impl Layout {
         // If there are no delimiters, insert a null space.  Otherwise we insert
         // the delimiters _after_ we have laidout the body of the matrix.
         if array.left_delimiter.is_none() {
-            hbox.add_node(kern![horz: config.constants.null_delimiter_space * config.font_size]);
+            hbox.add_node(kern![horz: config.ctx.constants.null_delimiter_space * config.font_size]);
         }
 
         // layout the body of the matrix
@@ -726,7 +718,7 @@ impl Layout {
         }
 
         if array.right_delimiter.is_none() {
-            hbox.add_node(kern![horz: config.constants.null_delimiter_space * config.font_size]);
+            hbox.add_node(kern![horz: config.ctx.constants.null_delimiter_space * config.font_size]);
         }
 
         // TODO: Reference array vertical alignment (optional [bt] arguments)
@@ -734,7 +726,7 @@ impl Layout {
         // Note: hbox has no depth, so hbox.height is total height.
         let height = hbox.height;
         let mut vbox = builders::VBox::new();
-        let offset = height * 0.5 - config.constants.axis_height.scaled(config);
+        let offset = height * 0.5 - config.ctx.constants.axis_height.scaled(config);
         vbox.set_offset(offset);
         vbox.add_node(hbox.build());
         let vbox = vbox.build();
@@ -748,9 +740,9 @@ impl Layout {
 
         // place delimiters in an hbox surrounding the matrix body
         let mut hbox = builders::HBox::new();
-        let axis = config.constants.axis_height.scaled(config);
-        let clearance = max(height * config.constants.delimiter_factor,
-                            height - config.constants.delimiter_short_fall * config.font_size);
+        let axis = config.ctx.constants.axis_height.scaled(config);
+        let clearance = max(height * config.ctx.constants.delimiter_factor,
+                            height - config.ctx.constants.delimiter_short_fall * config.font_size);
 
         if let Some(left) = array.left_delimiter {
             let left = config.ctx.glyph(left.codepoint)

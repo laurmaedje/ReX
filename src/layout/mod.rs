@@ -308,12 +308,12 @@ impl Style {
         }
     }
 
-    fn sup_shift_up(self, config: &LayoutSettings) -> Length<Em> {
+    fn sup_shift_up(self, config: LayoutSettings) -> Length<Em> {
         match self {
             Style::Display | Style::Text | Style::Script | Style::ScriptScript => {
-                config.constants.superscript_shift_up
+                config.ctx.constants.superscript_shift_up
             }
-            _ => config.constants.superscript_shift_up_cramped
+            _ => config.ctx.constants.superscript_shift_up_cramped
         }
     }
 
@@ -340,140 +340,23 @@ impl Style {
     }
 }
 
-#[derive(Clone)]
-pub struct Constants {
-    pub subscript_shift_down: Length<Em>,
-    pub subscript_top_max: Length<Em>,
-    pub subscript_baseline_drop_min: Length<Em>,
 
-    pub superscript_baseline_drop_max: Length<Em>,
-    pub superscript_bottom_min: Length<Em>,
-    pub superscript_shift_up_cramped: Length<Em>,
-    pub superscript_shift_up: Length<Em>,
-    pub sub_superscript_gap_min: Length<Em>,
-
-    pub upper_limit_baseline_rise_min: Length<Em>,
-    pub upper_limit_gap_min: Length<Em>,
-    pub lower_limit_gap_min: Length<Em>,
-    pub lower_limit_baseline_drop_min: Length<Em>,
-
-    pub fraction_rule_thickness: Length<Em>,
-    pub fraction_numerator_display_style_shift_up: Length<Em>,
-    pub fraction_denominator_display_style_shift_down: Length<Em>,
-    pub fraction_num_display_style_gap_min: Length<Em>,
-    pub fraction_denom_display_style_gap_min: Length<Em>,
-    pub fraction_numerator_shift_up: Length<Em>,
-    pub fraction_denominator_shift_down: Length<Em>,
-    pub fraction_numerator_gap_min: Length<Em>,
-    pub fraction_denominator_gap_min: Length<Em>,
-
-    pub axis_height: Length<Em>,
-    pub accent_base_height: Length<Em>,
-
-    pub delimited_sub_formula_min_height: Length<Em>,
-    pub display_operator_min_height: Length<Em>,
-
-    pub radical_display_style_vertical_gap: Length<Em>,
-    pub radical_vertical_gap: Length<Em>,
-    pub radical_rule_thickness: Length<Em>,
-    pub radical_extra_ascender: Length<Em>,
-
-    pub stack_display_style_gap_min: Length<Em>,
-    pub stack_top_display_style_shift_up: Length<Em>,
-    pub stack_top_shift_up: Length<Em>,
-    pub stack_bottom_shift_down: Length<Em>,
-    pub stack_gap_min: Length<Em>,
-
-    pub delimiter_factor: f64,
-    pub delimiter_short_fall: Length<Em>,
-    pub null_delimiter_space: Length<Em>,
-
-    pub script_percent_scale_down: f64,
-    pub script_script_percent_scale_down: f64,
-}
-
-impl Constants {
-    pub fn new(math: &MathConstants, font_size: Scale<Px, Em>, font_units_to_em: Scale<Em, Font>) -> Self {
-        let em = |v: f64| -> Length<Em> { Length::new(v, Font) * font_units_to_em };
-        let font = |v: f64| Length::new(v, Font);
-
-        Constants {
-            subscript_shift_down: em(math.subscript_top_max.value.into()),
-            subscript_top_max: em(math.subscript_top_max.value.into()),
-            subscript_baseline_drop_min: em(math.subscript_baseline_drop_min.value.into()),
-            
-            superscript_baseline_drop_max: em(math.superscript_baseline_drop_max.value.into()),
-            superscript_bottom_min: em(math.superscript_bottom_min.value.into()),
-            superscript_shift_up_cramped: em(math.superscript_shift_up_cramped.value.into()),
-            superscript_shift_up: em(math.superscript_shift_up.value.into()),
-            sub_superscript_gap_min: em(math.sub_superscript_gap_min.value.into()),
-
-            upper_limit_baseline_rise_min: em(math.upper_limit_baseline_rise_min.value.into()),
-            upper_limit_gap_min: em(math.upper_limit_gap_min.value.into()),
-            lower_limit_gap_min: em(math.lower_limit_gap_min.value.into()),
-            lower_limit_baseline_drop_min: em(math.lower_limit_baseline_drop_min.value.into()),
-
-            fraction_rule_thickness: em(math.fraction_rule_thickness.value.into()),
-            fraction_numerator_display_style_shift_up: em(math.fraction_numerator_display_style_shift_up.value.into()),
-            fraction_denominator_display_style_shift_down: em(math.fraction_denominator_display_style_shift_down.value.into()),
-            fraction_num_display_style_gap_min: em(math.fraction_num_display_style_gap_min.value.into()),
-            fraction_denom_display_style_gap_min: em(math.fraction_denom_display_style_gap_min.value.into()),
-            fraction_numerator_shift_up: em(math.fraction_numerator_shift_up.value.into()),
-            fraction_denominator_shift_down: em(math.fraction_denominator_shift_down.value.into()),
-            fraction_numerator_gap_min: em(math.fraction_numerator_gap_min.value.into()),
-            fraction_denominator_gap_min: em(math.fraction_denominator_gap_min.value.into()),
-
-            axis_height: em(math.axis_height.value.into()),
-            accent_base_height: em(math.accent_base_height.value.into()),
-
-            delimited_sub_formula_min_height: em(math.delimited_sub_formula_min_height.into()),
-
-            display_operator_min_height: em(math.display_operator_min_height.into()),
-
-            radical_display_style_vertical_gap: em(math.radical_display_style_vertical_gap.value.into()),
-            radical_vertical_gap: em(math.radical_vertical_gap.value.into()),
-            radical_rule_thickness: em(math.radical_rule_thickness.value.into()),
-            radical_extra_ascender: em(math.radical_extra_ascender.value.into()),
-
-            stack_display_style_gap_min: em(math.stack_display_style_gap_min.value.into()),
-            stack_top_display_style_shift_up: em(math.stack_top_display_style_shift_up.value.into()),
-            stack_top_shift_up: em(math.stack_top_shift_up.value.into()),
-            stack_bottom_shift_down: em(math.stack_bottom_shift_down.value.into()),
-            stack_gap_min: em(math.stack_gap_min.value.into()),
-
-            delimiter_factor: 0.901,
-            delimiter_short_fall: Length::new(0.1, Em),
-            null_delimiter_space: Length::new(0.1, Em),
-
-            script_percent_scale_down: 0.01 * math.script_percent_scale_down.into(),
-            script_script_percent_scale_down: 0.01 * math.script_script_percent_scale_down.into(),
-        }
-    }
-}
-
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct LayoutSettings<'a> {
-    pub ctx: FontContext<'a>,
-    pub constants: Constants,
+    pub ctx: &'a FontContext<'a>,
     pub font_size: Scale<Px, Em>,
     pub style: Style,
-    pub units_per_em: Scale<Font, Em>,
-    pub font_units_to_world: Scale<Px, Font>,
 }
 
 impl<'a> LayoutSettings<'a> {
-    pub fn new(ctx: FontContext<'a>, font_size: Scale<Px, Em>, style: Style) -> Self {
+    pub fn new(ctx: &'a FontContext<'a>, font_size: Scale<Px, Em>, style: Style) -> Self {
         use font::Font;
         let font_units_to_em = Scale::new(ctx.font.font_matrix().matrix.m11() as f64, Em, Font);
         let units_per_em = font_units_to_em.inv();
-        let constants = Constants::new(&ctx.math.constants, font_size, font_units_to_em);
         LayoutSettings {
             ctx,
-            constants,
             font_size,
             style,
-            units_per_em,
-            font_units_to_world: font_size / units_per_em
         }
     }
 

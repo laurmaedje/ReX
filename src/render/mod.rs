@@ -77,13 +77,13 @@ pub trait Backend {
 }
 
 pub struct Renderer<'a> {
-    settings: RenderSettings<'a>,
+    settings: &'a RenderSettings<'a>,
     layout_settings: LayoutSettings<'a>,
 }
 impl<'a> Renderer<'a> {
-    pub fn new(settings: RenderSettings<'a>) -> Self {
+    pub fn new(settings: &'a RenderSettings<'a>) -> Self {
         Renderer {
-            layout_settings: LayoutSettings::new(settings.ctx, settings.font_size, settings.style),
+            layout_settings: LayoutSettings::new(&settings.ctx, settings.font_size, settings.style),
             settings
         }
     }
