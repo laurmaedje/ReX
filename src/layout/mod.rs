@@ -22,7 +22,7 @@ pub mod engine;
 pub mod spacing;
 
 use crate::parser::color::RGBA;
-use crate::font::{FontContext, MathConstants};
+use crate::font::{FontContext};
 use std::ops::Deref;
 use std::fmt;
 use std::cmp::{max, min};
@@ -350,9 +350,6 @@ pub struct LayoutSettings<'a> {
 
 impl<'a> LayoutSettings<'a> {
     pub fn new(ctx: &'a FontContext<'a>, font_size: Scale<Px, Em>, style: Style) -> Self {
-        use font::Font;
-        let font_units_to_em = Scale::new(ctx.font.font_matrix().matrix.m11() as f64, Em, Font);
-        let units_per_em = font_units_to_em.inv();
         LayoutSettings {
             ctx,
             font_size,

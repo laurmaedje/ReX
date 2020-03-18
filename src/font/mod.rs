@@ -25,10 +25,36 @@ pub struct FontContext<'a> {
 }
 impl<'a> FontContext<'a> {
     pub fn glyph(&self, codepoint: char) -> Glyph {
-        unimplemented!()
+        use font::Font;
+        let gid = self.font.gid_for_codepoint(codepoint as u32).unwrap();
+        self.glyph_from_gid(gid.0 as u16)
     }
     pub fn glyph_from_gid(&self, gid: u16) -> Glyph {
-        unimplemented!()
+        use font::{Font, GlyphId};
+        use vector::Outline;
+        let font = self.font;
+        let hmetrics = font.glyph_metrics(gid).unwrap();
+        let italics = self.math.glyph_info.italics_correction_info.get(gid).map(|info| info.value).unwrap_or_default();
+        let attachment = self.math.glyph_info.top_accent_attachment.get(gid).map(|info| info.value).unwrap_or_default();
+        let glyph = font.glyph(GlyphId(gid as u32)).unwrap();
+        let bbox = glyph.path.bounding_box().unwrap();
+        let ll = bbox.lower_left();
+        let ur = bbox.upper_right();
+
+        Glyph {
+            gid,
+            ctx: self,
+            advance: Length::new(hmetrics.advance.x(), Font),
+            lsb: Length::new(hmetrics.lsb.x(), Font),
+            italics: Length::new(italics, Font),
+            attachment: Length::new(attachment, Font),
+            bbox: (
+                Length::new(ll.x(), Font),
+                Length::new(ll.y(), Font),
+                Length::new(ur.x(), Font),
+                Length::new(ur.y(), Font),
+            )
+        }
     }
     pub fn new(font: &'a OpenTypeFont<Outline>) -> Self {
         use font::Font;
@@ -101,7 +127,6 @@ pub struct Constants {
 impl Constants {
     pub fn new(math: &MathConstants, font_units_to_em: Scale<Em, Font>) -> Self {
         let em = |v: f64| -> Length<Em> { Length::new(v, Font) * font_units_to_em };
-        let font = |v: f64| Length::new(v, Font);
 
         Constants {
             subscript_shift_down: em(math.subscript_top_max.value.into()),
@@ -168,20 +193,17 @@ pub struct Glyph<'a> {
     pub attachment: Length<Font>,
 }
 impl<'a> Glyph<'a> {
-    pub fn new(font: &'a OpenTypeFont<Outline>, gid: u16) -> Glyph<'a> {
-        unimplemented!()
-    }
     pub fn height(&self) -> Length<Font> {
         self.bbox.3
     }
     pub fn depth(&self) -> Length<Font> {
         self.bbox.1
     }
-    pub fn vert_variant(&self, height: Length<Font>) -> Glyph {
-        unimplemented!()
+    pub fn vert_variant(&self, height: Length<Font>) -> VariantGlyph {
+        self.ctx.math.variants.vert_variant(self.gid, (height / Font) as u32)
     }
     pub fn horz_variant(&self, width: Length<Font>) -> VariantGlyph {
-        unimplemented!()
+        self.ctx.math.variants.horz_variant(self.gid, (width / Font) as u32)
     }
 }
 

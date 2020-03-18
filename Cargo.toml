@@ -12,6 +12,7 @@ font = { git = "https://github.com/pdf-rs/font" }
 pathfinder_geometry = { git = "https://github.com/s3bk/pathfinder/" }
 pathfinder_content = { git = "https://github.com/s3bk/pathfinder/" }
 unicode-math = { git = "https://github.com/s3bk/unicode-math/" }
+vector = { git = "https://github.com/s3bk/vector", features=["impl_pathfinder"] }
 
 static_map = "0.2.0-beta"
 static_map_macros = "0.2.0-beta"
@@ -25,3 +26,6 @@ env_logger = "*"
 
 [dependencies.log]
 version="0.4.8"
+
+[patch."https://github.com/pdf-rs/font"]
+font = { path = "../font" }

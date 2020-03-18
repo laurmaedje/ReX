@@ -86,7 +86,6 @@ impl AsLayoutNode for VariantGlyph {
 }
 
 impl<'a> LayoutSettings<'a> {
-    #[inline]
     fn scale_factor(&self) -> f64 {
         match self.style {
             Style::Display |
@@ -104,15 +103,9 @@ impl<'a> LayoutSettings<'a> {
                 => 0.01 * self.ctx.constants.script_script_percent_scale_down,
         }
     }
-    #[inline]
     fn scale_font_unit(&self, length: Length<Font>) -> Length<Px> {
         length / self.ctx.units_per_em * self.font_size
     }
-    #[inline]
-    fn scale_length<U>(&self, length: Length<U>) -> Length<U> {
-        length * self.scale_factor()
-    }
-    #[inline]
     pub fn to_font(&self, length: Length<Px>) -> Length<Font> {
         length / self.font_size * self.ctx.units_per_em
     }
@@ -122,26 +115,22 @@ pub trait Scaled {
 }
 
 impl Scaled for Length<Font> {
-    #[inline]
     fn scaled(self, config: LayoutSettings) -> Length<Px> {
         config.scale_font_unit(self)
     }
 }
 
 impl Scaled for Length<Px> {
-    #[inline]
-    fn scaled(self, config: LayoutSettings) -> Length<Px> {
+    fn scaled(self, _config: LayoutSettings) -> Length<Px> {
         self
     }
 }
 impl Scaled for Length<Em> {
-    #[inline]
     fn scaled(self, config: LayoutSettings) -> Length<Px> {
         self * config.font_size
     }
 }
 impl Scaled for Unit {
-    #[inline]
     fn scaled(self, config: LayoutSettings) -> Length<Px> {
         match self {
             Unit::Em(em) => Length::new(em, Em) * config.font_size,

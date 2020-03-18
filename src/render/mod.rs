@@ -1,10 +1,8 @@
-use serde::{Serialize, Deserialize};
-
 use crate::error::Error;
 use crate::font::FontContext;
 use crate::dimensions::*;
 use crate::layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings, Layout};
-use crate::parser::{parse, color::RGBA};
+use crate::parser::{color::RGBA};
 
 const HBOX_COLOR: &str = "blue";
 const VBOX_COLOR: &str = "red";
@@ -86,6 +84,14 @@ impl<'a> Renderer<'a> {
             layout_settings: LayoutSettings::new(&settings.ctx, settings.font_size, settings.style),
             settings
         }
+    }
+    pub fn layout(&self, tex: &str) -> Result<Layout, Error> {
+        use crate::parser::parse;
+        use crate::layout::engine::layout;
+
+
+        let mut parse = parse(tex)?;
+        Ok(layout(&mut parse, self.layout_settings))
     }
     pub fn size(&self, layout: &LayoutNode) -> (f64, f64) {
         (layout.width / Px, layout.height / Px)

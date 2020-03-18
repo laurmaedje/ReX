@@ -1,4 +1,4 @@
-use crate::dimensions::{Length, Px, Unit};
+use crate::dimensions::{Unit};
 use crate::layout::Style;
 use crate::error::Error;
 use super::color::RGBA;

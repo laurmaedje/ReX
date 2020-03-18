@@ -74,7 +74,6 @@ static DIGIT_LUT: [u32; 28] = [
 
 /// Take a codepoint and a stlye (a weight and family pair), and apply the
 /// current font style to the given codepoint.
-#[inline]
 pub fn style_symbol(codepoint: char, style: Style) -> char {
     let codepoint = codepoint as u32;
     let cp = match codepoint {
