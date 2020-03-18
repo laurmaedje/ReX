@@ -49,12 +49,12 @@ impl<'a> FontContext<'a> {
             lsb: Length::new(hmetrics.lsb.x(), Font),
             italics: Length::new(italics, Font),
             attachment: Length::new(attachment, Font),
-            bbox: dbg!((
+            bbox: (
                 Length::new(ll.x(), Font),
                 Length::new(ur.y(), Font),
                 Length::new(ur.x(), Font),
                 Length::new(ll.y(), Font),
-            ))
+            )
         }
     }
     pub fn new(font: &'a OpenTypeFont<Outline>) -> Self {

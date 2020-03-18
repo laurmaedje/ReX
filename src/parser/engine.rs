@@ -240,11 +240,14 @@ pub fn symbol(lex: &mut Lexer, local: Style) -> Result<Option<ParseNode>> {
         Token::Command(cs) => {
             if let Some(sym) = Symbol::from_name(cs) {
                 lex.next();
-                if sym.atom_type == AtomType::Accent {
-                    let nucleus = required_argument(lex, local)?;
-                    Ok(Some(accent!(sym, nucleus)))
-                } else {
-                    Ok(Some(symbol!(style_symbol(sym.codepoint, local), sym.atom_type)))
+                match sym.atom_type {
+                    AtomType::Accent | AtomType::Over | AtomType::Under => {
+                        let nucleus = required_argument(lex, local)?;
+                        Ok(Some(accent!(sym, nucleus)))
+                    }
+                    _ => {
+                        Ok(Some(symbol!(style_symbol(sym.codepoint, local), sym.atom_type)))
+                    }
                 }
             } else {
                 Ok(None)

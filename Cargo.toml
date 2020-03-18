@@ -28,6 +28,3 @@ env_logger = "*"
 
 [dependencies.log]
 version="0.4.8"
-
-[patch."https://github.com/pdf-rs/font"]
-font = { path = "../font" }

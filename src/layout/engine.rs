@@ -76,6 +76,7 @@ fn layout_node(node: &ParseNode, config: LayoutSettings) -> Layout {
 
 impl Layout {
     fn dispatch(&mut self, config: LayoutSettings, node: &ParseNode, next: AtomType) {
+        dbg!(node);
         match *node {
             ParseNode::Symbol(sym) => self.symbol(sym, config),
             ParseNode::Scripts(ref script) => self.scripts(script, config),
@@ -103,11 +104,9 @@ impl Layout {
     fn symbol(&mut self, sym: Symbol, config: LayoutSettings) {
         // Operators are handled specially.  We may need to find a larger
         // symbol and vertical center it.
-        if let AtomType::Operator(_) = sym.atom_type {
-            self.largeop(sym, config);
-        } else {
-            let glyph = config.ctx.glyph(sym.codepoint);
-            self.add_node(glyph.as_layout(config));
+        match sym.atom_type {
+            AtomType::Operator(_) => self.largeop(sym, config),
+            _ => self.add_node(config.ctx.glyph(sym.codepoint).as_layout(config))
         }
     }
 
@@ -132,6 +131,7 @@ impl Layout {
         // [ ] WideAccent vs Accent: Don't expand Accent types.
         let base = layout(&acc.nucleus, config.cramped());
         let accent_variant = config.ctx.glyph(acc.symbol.codepoint).horz_variant(config.to_font(base.width));
+        dbg!(&accent_variant);
         let accent = accent_variant.as_layout(config);
 
         // Attachment points for accent & base are calculated by

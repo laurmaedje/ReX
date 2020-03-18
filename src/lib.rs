@@ -20,7 +20,7 @@ pub mod lexer;
 pub mod parser;
 pub mod render;
 
-mod font;
+pub mod font;
 mod functions;
 
 pub use render::*;
