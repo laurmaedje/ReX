@@ -96,11 +96,11 @@ impl<'a> LayoutSettings<'a> {
 
             Style::Script |
             Style::ScriptCramped
-                => 0.01 * self.ctx.constants.script_percent_scale_down,
+                => self.ctx.constants.script_percent_scale_down,
 
             Style::ScriptScript |
             Style::ScriptScriptCramped
-                => 0.01 * self.ctx.constants.script_script_percent_scale_down,
+                => self.ctx.constants.script_script_percent_scale_down,
         }
     }
     fn scale_font_unit(&self, length: Length<Font>) -> Length<Px> {
@@ -116,25 +116,26 @@ pub trait Scaled {
 
 impl Scaled for Length<Font> {
     fn scaled(self, config: LayoutSettings) -> Length<Px> {
-        config.scale_font_unit(self)
+        config.scale_font_unit(self) * config.scale_factor()
     }
 }
 
 impl Scaled for Length<Px> {
-    fn scaled(self, _config: LayoutSettings) -> Length<Px> {
-        self
+    fn scaled(self, config: LayoutSettings) -> Length<Px> {
+        self * config.scale_factor()
     }
 }
 impl Scaled for Length<Em> {
     fn scaled(self, config: LayoutSettings) -> Length<Px> {
-        self * config.font_size
+        self * config.font_size * config.scale_factor()
     }
 }
 impl Scaled for Unit {
     fn scaled(self, config: LayoutSettings) -> Length<Px> {
-        match self {
+        let length = match self {
             Unit::Em(em) => Length::new(em, Em) * config.font_size,
             Unit::Px(px) => Length::new(px, Px)
-        }
+        };
+        length * config.scale_factor()
     }
 }

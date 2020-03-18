@@ -25,6 +25,7 @@ pub struct FontContext<'a> {
 }
 impl<'a> FontContext<'a> {
     pub fn glyph(&self, codepoint: char) -> Glyph {
+        dbg!(codepoint);
         use font::Font;
         let gid = self.font.gid_for_codepoint(codepoint as u32).unwrap();
         self.glyph_from_gid(gid.0 as u16)
@@ -48,12 +49,12 @@ impl<'a> FontContext<'a> {
             lsb: Length::new(hmetrics.lsb.x(), Font),
             italics: Length::new(italics, Font),
             attachment: Length::new(attachment, Font),
-            bbox: (
+            bbox: dbg!((
                 Length::new(ll.x(), Font),
-                Length::new(ll.y(), Font),
-                Length::new(ur.x(), Font),
                 Length::new(ur.y(), Font),
-            )
+                Length::new(ur.x(), Font),
+                Length::new(ll.y(), Font),
+            ))
         }
     }
     pub fn new(font: &'a OpenTypeFont<Outline>) -> Self {

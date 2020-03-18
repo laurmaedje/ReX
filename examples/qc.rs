@@ -1,23 +1,14 @@
-extern crate log;
-extern crate env_logger;
-extern crate rex;
-
+use std::fs;
 use rex::*;
+use rex::render::scene::svg;
 
 fn main() {
-    let input = std::env::args()
-        .skip(1)
-        .next()
-        .expect("must provide an argument!");
-
-    let font = "rex-xits.otf";
-    let output = "test.svg";
+    let mut args = std::env::args().skip(1);
+    let font = args.next().expect("font");
+    let tex = args.next().expect("tex");
 
     env_logger::init();
-    let settings = RenderSettings::default()
-        .font_size(96)
-        .font_src(font)
-        .debug(true);
+    let font = fs::read(font).unwrap();
 
-    svg::render_to_path(output, &settings, &input);
+    fs::write("tex.svg", &svg(&font, &tex)).unwrap();
 }

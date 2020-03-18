@@ -115,7 +115,7 @@ impl_length!(Font, Em, Px);
 
 /// scale * T/U
 pub struct Scale<T, U> {
-    factor: f64,
+    pub factor: f64,
     _t: PhantomData<T>,
     _u: PhantomData<U>,
 }

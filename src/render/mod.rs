@@ -4,10 +4,6 @@ use crate::dimensions::*;
 use crate::layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings, Layout};
 use crate::parser::{color::RGBA};
 
-const HBOX_COLOR: &str = "blue";
-const VBOX_COLOR: &str = "red";
-const GLYPH_COLOR: &str = "green";
-
 pub struct RenderSettings<'a> {
     pub ctx: FontContext<'a>,
     pub font_size: Scale<Px, Em>,
@@ -68,10 +64,17 @@ impl<'a> RenderSettings<'a> {
 }
 
 pub trait Backend {
-    fn bbox(&mut self, _pos: Cursor, _width: f64, _height: f64, _color: &str) {}
-    fn symbol(&self, pos: Cursor, gid: u16, scale: f64);
-    fn rule(&self, pos: Cursor, width: f64, height: f64);
-    fn color(&self, color: RGBA, contents: impl FnMut(&mut Self));
+    fn bbox(&mut self, _pos: Cursor, _width: f64, _height: f64, role: Role) {}
+    fn symbol(&mut self, pos: Cursor, gid: u16, scale: f64);
+    fn rule(&mut self, pos: Cursor, width: f64, height: f64);
+    fn begin_color(&mut self, color: RGBA);
+    fn end_color(&mut self);
+}
+
+pub enum Role {
+    Glyph,
+    VBox,
+    HBox,
 }
 
 pub struct Renderer<'a> {
@@ -93,13 +96,19 @@ impl<'a> Renderer<'a> {
         let mut parse = parse(tex)?;
         Ok(layout(&mut parse, self.layout_settings))
     }
-    pub fn size(&self, layout: &LayoutNode) -> (f64, f64) {
-        (layout.width / Px, layout.height / Px)
+    // (x0, y0, x1, y1)
+    pub fn size(&self, layout: &Layout) -> (f64, f64, f64, f64) {
+        (
+            0.0,
+            layout.depth / Px,
+            layout.width / Px,
+            layout.height / Px
+        )
     }
     pub fn render(&self, layout: &Layout, out: &mut impl Backend) {
         let pos = Cursor {
             x: 0.0,
-            y: layout.height / Px,
+            y: (layout.height + layout.depth) / Px,
         };
         self.render_hbox(out, pos, &layout.contents, layout.height / Px, layout.width / Px, Alignment::Default);
     }
@@ -110,23 +119,23 @@ impl<'a> Renderer<'a> {
         }
 
         if self.settings.debug {
-            out.bbox(pos.up(height), nodes_width, height, HBOX_COLOR);
+            out.bbox(pos.up(height), nodes_width, height, Role::HBox);
         }
 
         for node in nodes {
             match node.node {
                 LayoutVariant::Glyph(ref gly) => {
                     if self.settings.debug {
-                        out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, GLYPH_COLOR);
+                        out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, Role::Glyph);
                     }
-                    out.symbol(pos, gly.gid, f64::from(gly.scale));
+                    out.symbol(pos, gly.gid, dbg!(gly.scale) * self.layout_settings.font_size.factor);
                 }
 
                 LayoutVariant::Rule => out.rule(pos.up(node.height / Px), node.width / Px, node.height / Px),
 
                 LayoutVariant::VerticalBox(ref vbox) => {
                     if self.settings.debug {
-                        out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, VBOX_COLOR);
+                        out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, Role::VBox);
                     }
                     self.render_vbox(out, pos.up(node.height / Px), &vbox.contents);
                 }
@@ -136,9 +145,9 @@ impl<'a> Renderer<'a> {
                 }
 
                 LayoutVariant::Color(ref clr) => {
-                    out.color(clr.color, |out| {
-                        self.render_hbox(out, pos, &clr.inner, node.height / Px, node.width / Px, Alignment::Default);
-                    });
+                    out.begin_color(clr.color);
+                    self.render_hbox(out, pos, &clr.inner, node.height / Px, node.width / Px, Alignment::Default);
+                    out.end_color();
                 }
 
                 LayoutVariant::Kern => { /* NOOP */ }
@@ -163,16 +172,16 @@ impl<'a> Renderer<'a> {
 
                 LayoutVariant::VerticalBox(ref vbox) => {
                     if self.settings.debug {
-                        out.bbox(pos, node.width / Px, (node.height - node.depth) / Px, VBOX_COLOR);
+                        out.bbox(pos, node.width / Px, (node.height - node.depth) / Px, Role::VBox);
                     }
                     self.render_vbox(out, pos, &vbox.contents);
                 }
 
                 LayoutVariant::Glyph(ref gly) => {
                     if self.settings.debug {
-                        out.bbox(pos, node.width / Px, (node.height - node.depth) / Px, GLYPH_COLOR);
+                        out.bbox(pos, node.width / Px, (node.height - node.depth) / Px, Role::Glyph);
                     }
-                    out.symbol(pos.down(node.height / Px), gly.gid, gly.scale);
+                    out.symbol(pos.down(node.height / Px), gly.gid, dbg!(gly.scale) * self.layout_settings.font_size.factor);
                 }
 
                 LayoutVariant::Color(_) => panic!("Shouldn't have a color in a vertical box???"),
@@ -184,3 +193,5 @@ impl<'a> Renderer<'a> {
         }
     }
 }
+
+pub mod scene;
