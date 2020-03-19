@@ -1,5 +1,5 @@
 use crate::dimensions::Unit;
-use crate::font::{Weight, Family, AtomType, Style, style_symbol, Symbol};
+use crate::font::{Weight, Family, AtomType, Style, style_symbol};
 use crate::layout::Style as LayoutStyle;
 use crate::lexer::{Lexer, Token};
 use crate::parser as parse;
@@ -7,6 +7,7 @@ use crate::parser::nodes::{ParseNode, Radical, MathStyle, GenFraction, Rule, Bar
                     Color, Stack};
 use crate::parser::color::RGBA;
 use crate::error::{Error, Result};
+use crate::parser::symbols::Symbol;
 
 
 macro_rules! sym {
@@ -17,7 +18,7 @@ macro_rules! sym {
     (@at close) => { AtomType::Close };
 
     ($code:expr, $ord:ident) => ({
-        Some($crate::font::Symbol {
+        Some(Symbol {
             codepoint: $code,
             atom_type: sym!(@at $ord),
         })

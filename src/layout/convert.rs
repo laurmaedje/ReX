@@ -8,44 +8,46 @@ use super::{Style};
 use super::builders;
 use super::{LayoutNode, LayoutVariant, LayoutGlyph};
 use crate::parser::nodes::Rule;
+use crate::error::Error;
 
-pub trait AsLayoutNode {
-    fn as_layout(&self, config: LayoutSettings) -> LayoutNode;
+pub trait AsLayoutNode<'f> {
+    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> Result<LayoutNode<'f>, Error>;
 }
 
-impl<'a> AsLayoutNode for Glyph<'a> {
-    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
-        LayoutNode {
+impl<'f> AsLayoutNode<'f> for Glyph<'f> {
+    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> Result<LayoutNode<'f>, Error> {
+        Ok(LayoutNode {
             height: self.height().scaled(config),
             width:  self.advance.scaled(config),
             depth:  self.depth().scaled(config),
             node:   LayoutVariant::Glyph(LayoutGlyph {
+                font: self.font,
                 gid: self.gid,
-                scale: config.scale_factor(),
+                size: Length::new(1.0, Em).scaled(config),
                 attachment: self.attachment.scaled(config),
                 italics: self.italics.scaled(config),
                 offset:  Length::zero(),
             })
-        }
+        })
     }
 }
 
-impl AsLayoutNode for Rule {
-    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
-        LayoutNode {
+impl<'f> AsLayoutNode<'f> for Rule {
+    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> Result<LayoutNode<'f>, Error> {
+        Ok(LayoutNode {
             node:   LayoutVariant::Rule,
             width:  self.width .scaled(config),
             height: self.height.scaled(config),
             depth:  Length::zero(),
-        }
+        })
     }
 }
 
-impl AsLayoutNode for VariantGlyph {
-    fn as_layout(&self, config: LayoutSettings) -> LayoutNode {
+impl<'f> AsLayoutNode<'f> for VariantGlyph {
+    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> Result<LayoutNode<'f>, Error> {
         match *self {
             VariantGlyph::Replacement(gid) => {
-                let glyph = config.ctx.glyph_from_gid(gid);
+                let glyph = config.ctx.glyph_from_gid(gid)?;
                 glyph.as_layout(config)
             },
 
@@ -54,8 +56,8 @@ impl AsLayoutNode for VariantGlyph {
                     Direction::Vertical => {
                         let mut contents = builders::VBox::new();
                         for instr in parts {
-                            let glyph = config.ctx.glyph_from_gid(instr.gid);
-                            contents.insert_node(0, glyph.as_layout(config));
+                            let glyph = config.ctx.glyph_from_gid(instr.gid)?;
+                            contents.insert_node(0, glyph.as_layout(config)?);
                             if instr.overlap != 0 {
                                 let overlap = Length::new(instr.overlap, Font);
                                 let kern = -(overlap + glyph.depth()).scaled(config);
@@ -63,21 +65,21 @@ impl AsLayoutNode for VariantGlyph {
                             }
                         }
 
-                        contents.build()
+                        Ok(contents.build())
                     },
 
                     Direction::Horizontal => {
                         let mut contents = builders::HBox::new();
                         for instr in parts {
-                            let glyph = config.ctx.glyph_from_gid(instr.gid);
+                            let glyph = config.ctx.glyph_from_gid(instr.gid)?;
                             if instr.overlap != 0 {
                                 let kern = -Length::new(instr.overlap, Font).scaled(config);
                                 contents.add_node(kern!(horz: kern));
                             }
-                            contents.add_node(glyph.as_layout(config));
+                            contents.add_node(glyph.as_layout(config)?);
                         }
 
-                        contents.build()
+                        Ok(contents.build())
                     }
                 }
             },
@@ -85,7 +87,7 @@ impl AsLayoutNode for VariantGlyph {
     }
 }
 
-impl<'a> LayoutSettings<'a> {
+impl<'a, 'f> LayoutSettings<'a, 'f> {
     fn scale_factor(&self) -> f64 {
         match self.style {
             Style::Display |

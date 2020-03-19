@@ -3,7 +3,8 @@ use crate::layout::Style;
 use crate::error::Error;
 use super::color::RGBA;
 use crate::environments::Array;
-use crate::font::{Symbol, AtomType};
+use crate::font::{AtomType};
+use super::symbols::Symbol;
 
 // TODO: It might be worth letting the `Group` variant
 //   to have an atomtype associated with it.  By default,

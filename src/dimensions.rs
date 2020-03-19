@@ -2,6 +2,7 @@ use std::ops::{Add, Sub, Mul, AddAssign, SubAssign, MulAssign, Div, Neg};
 use std::cmp::{Ord, Eq, PartialEq, PartialOrd, Ordering};
 use std::marker::PhantomData;
 use std::fmt;
+use std::iter::Sum;
 
 #[derive(Debug)]
 pub struct Length<U> {
@@ -89,6 +90,12 @@ impl<U> Neg for Length<U> {
         Length { value: -self.value, _m: PhantomData }
     }
 }
+impl<U> Sum for Length<U> {
+    fn sum<I>(iter: I) -> Self where I: Iterator<Item = Self> {
+        Length { value: iter.map(|l| l.value).sum(), _m: PhantomData }
+    }
+}
+
 
 pub struct Font;
 pub struct Px;

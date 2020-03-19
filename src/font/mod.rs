@@ -6,7 +6,7 @@ use unicode_math::SYMBOLS;
 pub use unicode_math::AtomType;
 pub use style::style_symbol;
 
-use font::{OpenTypeFont, MathHeader};
+use font::{OpenTypeFont, MathHeader, GlyphId};
 pub use font::math::{
     assembly::{Direction},
     MathConstants,
@@ -15,36 +15,38 @@ pub use font::math::{
 use pathfinder_content::outline::Outline;
 
 use crate::dimensions::{*};
+use crate::error::Error;
+
+pub type MathFont = OpenTypeFont<Outline>;
 
 #[derive(Clone)]
-pub struct FontContext<'a> {
-    pub font: &'a OpenTypeFont<Outline>,
-    pub math: &'a MathHeader,
+pub struct FontContext<'f> {
+    pub font: &'f MathFont,
+    pub math: &'f MathHeader,
     pub constants: Constants,
     pub units_per_em: Scale<Font, Em>,
 }
-impl<'a> FontContext<'a> {
-    pub fn glyph(&self, codepoint: char) -> Glyph {
-        dbg!(codepoint);
+impl<'f> FontContext<'f> {
+    pub fn glyph(&self, codepoint: char) -> Result<Glyph<'f>, Error> {
         use font::Font;
-        let gid = self.font.gid_for_codepoint(codepoint as u32).unwrap();
+        let gid = self.font.gid_for_codepoint(codepoint as u32).ok_or(Error::MissingGlyphCodepoint(codepoint))?;
         self.glyph_from_gid(gid.0 as u16)
     }
-    pub fn glyph_from_gid(&self, gid: u16) -> Glyph {
-        use font::{Font, GlyphId};
+    pub fn glyph_from_gid(&self, gid: u16) -> Result<Glyph<'f>, Error> {
+        use font::{Font};
         use vector::Outline;
         let font = self.font;
-        let hmetrics = font.glyph_metrics(gid).unwrap();
+        let hmetrics = font.glyph_metrics(gid).ok_or(Error::MissingGlyphGID(gid))?;
         let italics = self.math.glyph_info.italics_correction_info.get(gid).map(|info| info.value).unwrap_or_default();
         let attachment = self.math.glyph_info.top_accent_attachment.get(gid).map(|info| info.value).unwrap_or_default();
-        let glyph = font.glyph(GlyphId(gid as u32)).unwrap();
+        let glyph = font.glyph(GlyphId(gid as u32)).ok_or(Error::MissingGlyphGID(gid))?;
         let bbox = glyph.path.bounding_box().unwrap();
         let ll = bbox.lower_left();
         let ur = bbox.upper_right();
 
-        Glyph {
+        Ok(Glyph {
             gid,
-            ctx: self,
+            font: self.font,
             advance: Length::new(hmetrics.advance.x(), Font),
             lsb: Length::new(hmetrics.lsb.x(), Font),
             italics: Length::new(italics, Font),
@@ -55,11 +57,11 @@ impl<'a> FontContext<'a> {
                 Length::new(ur.x(), Font),
                 Length::new(ll.y(), Font),
             )
-        }
+        })
     }
-    pub fn new(font: &'a OpenTypeFont<Outline>) -> Self {
+    pub fn new(font: &'f OpenTypeFont<Outline>) -> Self {
         use font::Font;
-        let math = font.math().unwrap();
+        let math = font.math().expect("no MATH tables");
         let font_units_to_em = Scale::new(font.font_matrix().matrix.m11() as f64, Em, Font);
         let units_per_em = font_units_to_em.inv();
         let constants = Constants::new(&math.constants, font_units_to_em);
@@ -70,6 +72,16 @@ impl<'a> FontContext<'a> {
             units_per_em,
             constants
         }
+    }
+    pub fn vert_variant(&self, codepoint: char, height: Length<Font>) -> Result<VariantGlyph, Error> {
+        use font::Font;
+        let GlyphId(gid) = self.font.gid_for_codepoint(codepoint as u32).ok_or(Error::MissingGlyphCodepoint(codepoint))?;
+        Ok(self.math.variants.vert_variant(gid as u16, (height / Font) as u32))
+    }
+    pub fn horz_variant(&self, codepoint: char, width: Length<Font>) -> Result<VariantGlyph, Error> {
+        use font::Font;
+        let GlyphId(gid) = self.font.gid_for_codepoint(codepoint as u32).ok_or(Error::MissingGlyphCodepoint(codepoint))?;
+        Ok(self.math.variants.horz_variant(gid as u16, (width / Font) as u32))
     }
 }
 
@@ -183,8 +195,8 @@ impl Constants {
     }
 }
 
-pub struct Glyph<'a> {
-    pub ctx: &'a FontContext<'a>,
+pub struct Glyph<'f> {
+    pub font: &'f MathFont,
     pub gid: u16,
     // x_min, y_min, x_max, y_max
     pub bbox: (Length<Font>, Length<Font>, Length<Font>, Length<Font>),
@@ -193,18 +205,12 @@ pub struct Glyph<'a> {
     pub italics: Length<Font>,
     pub attachment: Length<Font>,
 }
-impl<'a> Glyph<'a> {
+impl<'f> Glyph<'f> {
     pub fn height(&self) -> Length<Font> {
         self.bbox.3
     }
     pub fn depth(&self) -> Length<Font> {
         self.bbox.1
-    }
-    pub fn vert_variant(&self, height: Length<Font>) -> VariantGlyph {
-        self.ctx.math.variants.vert_variant(self.gid, (height / Font) as u32)
-    }
-    pub fn horz_variant(&self, width: Length<Font>) -> VariantGlyph {
-        self.ctx.math.variants.horz_variant(self.gid, (width / Font) as u32)
     }
 }
 
@@ -214,21 +220,6 @@ pub struct Style {
     pub weight: Weight,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Symbol {
-    pub codepoint: char,
-    pub atom_type: AtomType
-}
-impl Symbol {
-    pub fn from_name(name: &str) -> Option<Self> {
-        SYMBOLS.iter().find(|sym| sym.name == name).map(|sym| {
-            Symbol {
-                codepoint: sym.codepoint,
-                atom_type: sym.atom_type
-            }
-        })
-    }
-}
 
 impl Style {
     pub fn new() -> Style {

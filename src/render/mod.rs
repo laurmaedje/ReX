@@ -1,14 +1,10 @@
 use crate::error::Error;
-use crate::font::FontContext;
+use crate::font::MathFont;
 use crate::dimensions::*;
-use crate::layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings, Layout};
+use crate::layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings, Layout, Grid};
 use crate::parser::{color::RGBA};
 
-pub struct Renderer<'a> {
-    pub ctx: FontContext<'a>,
-    pub font_size: Scale<Px, Em>,
-    pub strict: bool,
-    pub style: Style,
+pub struct Renderer {
     pub debug: bool,
 }
 
@@ -53,7 +49,7 @@ impl Cursor {
 
 pub trait Backend {
     fn bbox(&mut self, _pos: Cursor, _width: f64, _height: f64, role: Role) {}
-    fn symbol(&mut self, pos: Cursor, gid: u16, scale: f64);
+    fn symbol(&mut self, pos: Cursor, gid: u16, scale: f64, ctx: &MathFont);
     fn rule(&mut self, pos: Cursor, width: f64, height: f64);
     fn begin_color(&mut self, color: RGBA);
     fn end_color(&mut self);
@@ -65,24 +61,18 @@ pub enum Role {
     HBox,
 }
 
-impl<'a> Renderer<'a> {
-    pub fn new(ctx: FontContext<'a>, font_size: f64) -> Self {
+impl Renderer {
+    pub fn new() -> Self {
         Renderer {
-            font_size: Scale::new(font_size, Px, Em),
-            ctx,
-            strict: true,
-            style: Style::Display,
             debug: false,
         }
     }
-    pub fn layout(&self, tex: &str) -> Result<Layout, Error> {
+    pub fn layout<'a, 'f>(&self, tex: &str, layout_settings: LayoutSettings<'a, 'f>) -> Result<Layout<'f>, Error> {
         use crate::parser::parse;
         use crate::layout::engine::layout;
 
-
         let mut parse = parse(tex)?;
-        let layout_settings = LayoutSettings::new(&self.ctx, self.font_size, self.style);
-        Ok(layout(&mut parse, layout_settings))
+        layout(&mut parse, layout_settings)
     }
     // (x0, y0, x1, y1)
     pub fn size(&self, layout: &Layout) -> (f64, f64, f64, f64) {
@@ -96,9 +86,24 @@ impl<'a> Renderer<'a> {
     pub fn render(&self, layout: &Layout, out: &mut impl Backend) {
         let pos = Cursor {
             x: 0.0,
-            y: (layout.height + layout.depth) / Px,
+            y: 0.0,
         };
         self.render_hbox(out, pos, &layout.contents, layout.height / Px, layout.width / Px, Alignment::Default);
+    }
+
+    fn render_grid(&self, out: &mut impl Backend, pos: Cursor, width: f64, height: f64, grid: &Grid) {
+        let x_offsets = grid.x_offsets();
+        let y_offsets = grid.y_offsets();
+        for (&(row, column), node) in grid.contents.iter() {
+            let width = grid.columns[column];
+            let (height, depth) = grid.rows[row];
+
+            self.render_node(
+                out,
+                pos.translate(x_offsets[column] / Px, (y_offsets[row] + height) / Px),
+                node
+            );
+        }
     }
 
     fn render_hbox(&self, out: &mut impl Backend, mut pos: Cursor, nodes: &[LayoutNode], height: f64, nodes_width: f64, alignment: Alignment) {
@@ -111,35 +116,7 @@ impl<'a> Renderer<'a> {
         }
 
         for node in nodes {
-            match node.node {
-                LayoutVariant::Glyph(ref gly) => {
-                    if self.debug {
-                        out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, Role::Glyph);
-                    }
-                    out.symbol(pos, gly.gid, gly.scale * self.font_size.factor);
-                }
-
-                LayoutVariant::Rule => out.rule(pos.up(node.height / Px), node.width / Px, node.height / Px),
-
-                LayoutVariant::VerticalBox(ref vbox) => {
-                    if self.debug {
-                        out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, Role::VBox);
-                    }
-                    self.render_vbox(out, pos.up(node.height / Px), &vbox.contents);
-                }
-
-                LayoutVariant::HorizontalBox(ref hbox) => {
-                    self.render_hbox(out, pos, &hbox.contents, node.height / Px, node.width / Px, hbox.alignment);
-                }
-
-                LayoutVariant::Color(ref clr) => {
-                    out.begin_color(clr.color);
-                    self.render_hbox(out, pos, &clr.inner, node.height / Px, node.width / Px, Alignment::Default);
-                    out.end_color();
-                }
-
-                LayoutVariant::Kern => { /* NOOP */ }
-            } // End macth
+            self.render_node(out, pos, node);
 
             pos.x += node.width / Px;
         }
@@ -148,7 +125,7 @@ impl<'a> Renderer<'a> {
         for node in nodes {
             match node.node {
                 LayoutVariant::Rule => out.rule(pos, node.width / Px, node.height / Px),
-
+                LayoutVariant::Grid(ref grid) => self.render_grid(out, pos, node.height / Px, node.width / Px, grid),
                 LayoutVariant::HorizontalBox(ref hbox) => {
                     self.render_hbox(out,
                                      pos.down(node.height / Px),
@@ -169,7 +146,7 @@ impl<'a> Renderer<'a> {
                     if self.debug {
                         out.bbox(pos, node.width / Px, (node.height - node.depth) / Px, Role::Glyph);
                     }
-                    out.symbol(pos.down(node.height / Px), gly.gid, gly.scale * self.font_size.factor);
+                    out.symbol(pos.down(node.height / Px), gly.gid, gly.size / Px, gly.font);
                 }
 
                 LayoutVariant::Color(_) => panic!("Shouldn't have a color in a vertical box???"),
@@ -179,6 +156,40 @@ impl<'a> Renderer<'a> {
 
             pos.y += node.height / Px;
         }
+    }
+
+    fn render_node<'a>(&self, out: &mut impl Backend, pos: Cursor, node: &LayoutNode<'a>) {
+        match node.node {
+            LayoutVariant::Glyph(ref gly) => {
+                if self.debug {
+                    out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, Role::Glyph);
+                }
+                out.symbol(pos, gly.gid, gly.size / Px, gly.font);
+            }
+
+            LayoutVariant::Rule => out.rule(pos.up(node.height / Px), node.width / Px, node.height / Px),
+
+            LayoutVariant::VerticalBox(ref vbox) => {
+                if self.debug {
+                    out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, Role::VBox);
+                }
+                self.render_vbox(out, pos.up(node.height / Px), &vbox.contents);
+            }
+
+            LayoutVariant::HorizontalBox(ref hbox) => {
+                self.render_hbox(out, pos, &hbox.contents, node.height / Px, node.width / Px, hbox.alignment);
+            }
+            LayoutVariant::Grid(ref grid) => self.render_grid(out, pos, node.height / Px, node.width / Px, grid),
+
+            LayoutVariant::Color(ref clr) => {
+                out.begin_color(clr.color);
+                self.render_hbox(out, pos, &clr.inner, node.height / Px, node.width / Px, Alignment::Default);
+                out.end_color();
+            }
+
+            LayoutVariant::Kern => { /* NOOP */ }
+        } // End macth
+
     }
 }
 

@@ -1,7 +1,8 @@
 use crate::lexer::OwnedToken;
 use std::error;
 use std::fmt;
-use crate::font::{AtomType, Symbol};
+use crate::font::{AtomType};
+use crate::parser::symbols::Symbol;
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
@@ -29,38 +30,9 @@ pub enum Error {
     UnexpectedEof(OwnedToken),
     UnrecognizedDimension,
     UnrecognizedColor(String),
+    MissingGlyphCodepoint(char),
+    MissingGlyphGID(u16),
     Todo,
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &'static str {
-        use self::Error::*;
-        match *self {
-            UnrecognizedCommand(_) => "unrecognized tex command",
-            UnrecognizedSymbol(_) => "unrecognized symbol",
-            FailedToParse(_) => "failed to parse",
-            ExcessiveSubscripts => "excessive number of subscripts",
-            ExcessiveSuperscripts => "excessive number of superscripts",
-            LimitsMustFollowOperator => "limit commands must follow an operator",
-            ExpectedMathField(_) => "expected a mathfield",
-            MissingSymbolAfterDelimiter => "missing symbol following delimiter",
-            MissingSymbolAfterAccent => "missing symbol following accent",
-            ExpectedAtomType(_, _) => "expected atom type",
-            ExpectedSymbol(_) => "expected symbol",
-            RequiredMacroArg => "required macro argument",
-            ExpectedTokenFound(_, _) => "unexpected token",
-            ExpectedOpen(_) => "expected Open, Fence, or period after `\\left`",
-            ExpectedClose(_) => "expected Open, Fence, or period after `\\right`",
-            ExpectedOpenGroup => "expected an open group symbol",
-            NoClosingBracket => "failed to find a closing bracket",
-            StackMustFollowGroup => "stack commands must follow a group",
-            AccentMissingArg(_) => "an argument must follow accent commands",
-            UnexpectedEof(_) => "unexpected end of parsing",
-            UnrecognizedDimension => "failed to parse dimension",
-            UnrecognizedColor(_) => "failed to parse color",
-            Todo => "an unfinished error",
-        }
-    }
 }
 
 impl fmt::Display for Error {
@@ -111,6 +83,10 @@ impl fmt::Display for Error {
                 write!(f, "failed to parse dimension"),
             UnrecognizedColor(ref color) =>
                 write!(f, "failed to recognize the color '{}'", color),
+            MissingGlyphCodepoint(cp) =>
+                write!(f, "missing glyph for codepoint'{}'", cp),
+            MissingGlyphGID(gid) =>
+                write!(f, "missing glyph with gid {}", gid),
             Todo =>
                 write!(f, "failed with an unspecified error that has yet be implemented"),
         }

@@ -1,6 +1,6 @@
 use crate::lexer::{Lexer, Token};
-use crate::font::{Style, Symbol, AtomType};
-use crate::parser::{self, optional_argument_with, required_argument_with, ParseNode};
+use crate::font::{Style, AtomType};
+use crate::parser::{self, optional_argument_with, required_argument_with, ParseNode, symbols::Symbol};
 use crate::error::{Result, Error};
 
 /// An enumeration of recognized enviornmnets.

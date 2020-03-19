@@ -1,28 +1,30 @@
 #![allow(dead_code)]
-use super::{VerticalBox, HorizontalBox, LayoutNode, LayoutVariant, Alignment};
+use super::{VerticalBox, HorizontalBox, LayoutNode, LayoutVariant, Alignment, Grid, Layout, ColorChange};
 use std::cmp::{max, min};
 use crate::dimensions::*;
+use std::collections::BTreeMap;
+use crate::parser::nodes;
 
 #[derive(Default)]
-pub struct VBox {
+pub struct VBox<'a> {
     pub width: Length<Px>,
     pub height: Length<Px>,
     pub depth: Length<Px>,
-    node: VerticalBox,
+    node: VerticalBox<'a>,
 }
 
-impl VBox {
-    pub fn new() -> VBox {
+impl<'a> VBox<'a> {
+    pub fn new() -> VBox<'a> {
         VBox::default()
     }
 
-    pub fn insert_node(&mut self, idx: usize, node: LayoutNode) {
+    pub fn insert_node(&mut self, idx: usize, node: LayoutNode<'a>) {
         self.width = max(self.width, node.width);
         self.height += node.height;
         self.node.contents.insert(idx, node);
     }
 
-    pub fn add_node(&mut self, node: LayoutNode) {
+    pub fn add_node(&mut self, node: LayoutNode<'a>) {
         self.width = max(self.width, node.width);
         self.height += node.height;
         self.node.contents.push(node);
@@ -32,7 +34,7 @@ impl VBox {
         self.node.offset = offset;
     }
 
-    pub fn build(mut self) -> LayoutNode {
+    pub fn build(mut self) -> LayoutNode<'a> {
         // The depth only depends on the depth
         // of the last element and offset.
         if let Some(node) = self.node.contents.last() {
@@ -67,20 +69,20 @@ macro_rules! vbox {
 }
 
 #[derive(Default)]
-pub struct HBox {
+pub struct HBox<'a> {
     pub width: Length<Px>,
     pub height: Length<Px>,
     pub depth: Length<Px>,
-    pub node: HorizontalBox,
+    pub node: HorizontalBox<'a>,
     pub alignment: Alignment,
 }
 
-impl HBox {
-    pub fn new() -> HBox {
+impl<'a> HBox<'a> {
+    pub fn new() -> HBox<'a> {
         HBox::default()
     }
 
-    pub fn add_node(&mut self, node: LayoutNode) {
+    pub fn add_node(&mut self, node: LayoutNode<'a>) {
         self.width += node.width;
         self.height = max(self.height, node.height);
         self.depth = min(self.depth, node.depth);
@@ -99,7 +101,7 @@ impl HBox {
         self.width = width;
     }
 
-    pub fn build(mut self) -> LayoutNode {
+    pub fn build(mut self) -> LayoutNode<'a> {
         self.depth -= self.node.offset;
         self.height -= self.node.offset;
 
@@ -109,6 +111,57 @@ impl HBox {
             depth: self.depth,
             node: LayoutVariant::HorizontalBox(self.node),
         }
+    }
+}
+
+impl<'a> Grid<'a> {
+    pub fn new() -> Grid<'a> {
+        Grid {
+            contents: BTreeMap::new(),
+            rows: Vec::new(),
+            columns: Vec::new(),
+        }
+    }
+    pub fn insert(&mut self, row: usize, column: usize, node: LayoutNode<'a>) {
+        if row >= self.rows.len() {
+            self.rows.resize(row + 1, (Length::zero(), Length::zero()));
+        }
+        if node.height > self.rows[row].0 {
+            self.rows[row].0 = node.height;
+        }
+        if node.depth < self.rows[row].1 {
+            self.rows[row].1 = node.depth;
+        }
+        if column >= self.columns.len() {
+            self.columns.resize(column + 1, Length::zero());
+        }
+        if node.width > self.columns[column] {
+            self.columns[column] = node.width;
+        }
+
+        self.contents.insert((row, column), node);
+    }
+    pub fn build(self) -> LayoutNode<'a> {
+        LayoutNode {
+            width:  self.columns.iter().cloned().sum(),
+            height: self.rows.iter().map(|&(height, depth)| height - depth).sum(),
+            depth: Length::zero(),
+            node: LayoutVariant::Grid(self)
+        }
+    }
+    pub fn x_offsets(&self) -> Vec<Length<Px>> {
+        self.columns.iter().scan(Length::zero(), |acc, &width| {
+            let x = *acc;
+            *acc += width;
+            Some(x)
+        }).collect()
+    }
+    pub fn y_offsets(&self) -> Vec<Length<Px>> {
+        self.rows.iter().scan(Length::zero(), |acc, &(height, depth)| {
+            let x = *acc;
+            *acc += height - depth;
+            Some(x)
+        }).collect()
     }
 }
 
@@ -172,16 +225,14 @@ macro_rules! kern {
     );
 }
 
-macro_rules! color {
-    ($layout:expr, $color:expr) => (
-        LayoutNode {
-            width: $layout.width,
-            height: $layout.height,
-            depth: $layout.depth,
-            node: LayoutVariant::Color(ColorChange {
-                color: $color.color,
-                inner: $layout.contents,
-            }),
-        }
-    )
+pub fn color<'a>(layout: Layout<'a>, color: &nodes::Color) -> LayoutNode<'a> {
+    LayoutNode {
+        width: layout.width,
+        height: layout.height,
+        depth: layout.depth,
+        node: LayoutVariant::Color(ColorChange {
+            color: color.color,
+            inner: layout.contents,
+        }),
+    }
 }

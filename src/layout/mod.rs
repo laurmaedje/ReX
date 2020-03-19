@@ -22,16 +22,17 @@ pub mod engine;
 pub mod spacing;
 
 use crate::parser::color::RGBA;
-use crate::font::{FontContext};
+use crate::font::{FontContext, MathFont};
 use std::ops::Deref;
 use std::fmt;
 use std::cmp::{max, min};
+use std::collections::BTreeMap;
 use crate::dimensions::*;
 
 // By default this will act as a horizontal box
 #[derive(Clone, Debug, Default)]
-pub struct Layout {
-    pub contents: Vec<LayoutNode>,
+pub struct Layout<'f> {
+    pub contents: Vec<LayoutNode<'f>>,
     pub width: Length<Px>,
     pub height: Length<Px>,
     pub depth: Length<Px>,
@@ -39,8 +40,8 @@ pub struct Layout {
     pub alignment: Alignment,
 }
 
-impl Layout {
-    pub fn as_node(self) -> LayoutNode {
+impl<'f> Layout<'f> {
+    pub fn as_node(self) -> LayoutNode<'f> {
         LayoutNode {
             width: self.width,
             height: self.height,
@@ -53,11 +54,11 @@ impl Layout {
         }
     }
 
-    pub fn new() -> Layout {
+    pub fn new() -> Layout<'f> {
         Layout::default()
     }
 
-    pub fn add_node(&mut self, node: LayoutNode) {
+    pub fn add_node(&mut self, node: LayoutNode<'f>) {
         self.width += node.width;
         self.height = max(self.height, node.height);
         self.depth = min(self.depth, node.depth);
@@ -68,19 +69,19 @@ impl Layout {
         self.offset = offset;
     }
 
-    pub fn finalize(mut self) -> Layout {
+    pub fn finalize(mut self) -> Layout<'f> {
         self.depth -= self.offset;
         self.height -= self.offset;
         self
     }
 
-    pub fn centered(mut self, new_width: Length<Px>) -> Layout {
+    pub fn centered(mut self, new_width: Length<Px>) -> Layout<'f> {
         self.alignment = Alignment::Centered(self.width);
         self.width = new_width;
         self
     }
 
-    fn is_symbol(&self) -> Option<LayoutGlyph> {
+    fn is_symbol(&self) -> Option<LayoutGlyph<'f>> {
         if self.contents.len() != 1 {
             return None;
         }
@@ -89,50 +90,61 @@ impl Layout {
 }
 
 #[derive(Clone)]
-pub struct LayoutNode {
-    pub node: LayoutVariant,
+pub struct LayoutNode<'f> {
+    pub node: LayoutVariant<'f>,
     pub width: Length<Px>,
     pub height: Length<Px>,
     pub depth: Length<Px>,
 }
 
 #[derive(Clone)]
-pub enum LayoutVariant {
-    HorizontalBox(HorizontalBox),
-    VerticalBox(VerticalBox),
-    Glyph(LayoutGlyph),
-    Color(ColorChange),
+pub enum LayoutVariant<'f> {
+    Grid(Grid<'f>),
+    HorizontalBox(HorizontalBox<'f>),
+    VerticalBox(VerticalBox<'f>),
+    Glyph(LayoutGlyph<'f>),
+    Color(ColorChange<'f>),
     Rule,
     Kern,
 }
 
 #[derive(Clone)]
-pub struct ColorChange {
+pub struct ColorChange<'f> {
     pub color: RGBA,
-    pub inner: Vec<LayoutNode>,
+    pub inner: Vec<LayoutNode<'f>>,
+}
+
+#[derive(Clone)]
+pub struct Grid<'f> {
+    pub contents: BTreeMap<(usize, usize), LayoutNode<'f>>,
+    /// max length of each column
+    pub columns: Vec<Length<Px>>,
+    /// (max height, max depth) of each row
+    pub rows: Vec<(Length<Px>, Length<Px>)>,
 }
 
 #[derive(Clone, Default)]
-pub struct HorizontalBox {
-    pub contents: Vec<LayoutNode>,
+pub struct HorizontalBox<'f> {
+    pub contents: Vec<LayoutNode<'f>>,
     pub offset: Length<Px>,
     pub alignment: Alignment,
 }
 
 #[derive(Clone, Default)]
-pub struct VerticalBox {
-    pub contents: Vec<LayoutNode>,
+pub struct VerticalBox<'f> {
+    pub contents: Vec<LayoutNode<'f>>,
     pub offset: Length<Px>,
     pub alignment: Alignment,
 }
 
 #[derive(Clone, Copy)]
-pub struct LayoutGlyph {
+pub struct LayoutGlyph<'f> {
     pub gid: u16,
-    pub scale: f64,
+    pub size: Length<Px>,
     pub offset: Length<Px>,
     pub attachment: Length<Px>,
     pub italics: Length<Px>,
+    pub font: &'f MathFont
 }
 
 #[allow(dead_code)]
@@ -151,21 +163,21 @@ impl Default for Alignment {
     }
 }
 
-impl Deref for HorizontalBox {
-    type Target = [LayoutNode];
+impl<'f> Deref for HorizontalBox<'f> {
+    type Target = [LayoutNode<'f>];
     fn deref(&self) -> &Self::Target {
         &self.contents
     }
 }
 
-impl Deref for VerticalBox {
-    type Target = [LayoutNode];
+impl<'f> Deref for VerticalBox<'f> {
+    type Target = [LayoutNode<'f>];
     fn deref(&self) -> &Self::Target {
         &self.contents
     }
 }
 
-impl fmt::Debug for VerticalBox {
+impl<'f> fmt::Debug for VerticalBox<'f> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.offset.is_zero() {
             write!(f, "VerticalBox({:?})", self.contents)
@@ -178,21 +190,22 @@ impl fmt::Debug for VerticalBox {
     }
 }
 
-impl fmt::Debug for HorizontalBox {
+impl<'f> fmt::Debug for HorizontalBox<'f> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "HorizontalBox({:?})", self.contents)
     }
 }
 
-impl fmt::Debug for LayoutGlyph {
+impl<'f> fmt::Debug for LayoutGlyph<'f> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "LayoutGlyph({})", self.gid)
     }
 }
 
-impl fmt::Debug for LayoutNode {
+impl<'f> fmt::Debug for LayoutNode<'f> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.node {
+            LayoutVariant::Grid(ref grid) =>  write!(f, "Grid(..)"),
             LayoutVariant::HorizontalBox(ref hb) => write!(f, "HBox({:?})", hb.contents),
             LayoutVariant::VerticalBox(ref vb) => write!(f, "VBox({:?})", vb.contents),
             LayoutVariant::Glyph(ref gly) => write!(f, "Glyph({:?})", gly),
@@ -211,11 +224,11 @@ impl fmt::Debug for LayoutNode {
     }
 }
 
-impl LayoutNode {
+impl<'f> LayoutNode<'f> {
     /// Center the vertical about the axis.
     /// For now this ignores offsets if already applied,
     /// and will break if there already are offsets.
-    fn centered(mut self, axis: Length<Px>) -> LayoutNode {
+    fn centered(mut self, axis: Length<Px>) -> LayoutNode<'f> {
         let shift = (self.height + self.depth) * 0.5 - axis;
 
         match self.node {
@@ -233,7 +246,7 @@ impl LayoutNode {
         self
     }
 
-    fn is_symbol(&self) -> Option<LayoutGlyph> {
+    fn is_symbol(&self) -> Option<LayoutGlyph<'f>> {
         match self.node {
             LayoutVariant::Glyph(gly) => Some(gly),
             LayoutVariant::HorizontalBox(ref hb) => is_symbol(&hb.contents),
@@ -244,7 +257,7 @@ impl LayoutNode {
     }
 }
 
-pub fn is_symbol(contents: &[LayoutNode]) -> Option<LayoutGlyph> {
+pub fn is_symbol<'a, 'b: 'a>(contents: &'a [LayoutNode<'b>]) -> Option<LayoutGlyph<'b>> {
     if contents.len() != 1 {
         return None;
     }
@@ -342,17 +355,17 @@ impl Style {
 
 
 #[derive(Copy, Clone)]
-pub struct LayoutSettings<'a> {
-    pub ctx: &'a FontContext<'a>,
+pub struct LayoutSettings<'a, 'f> {
+    pub ctx: &'a FontContext<'f>,
     pub font_size: Scale<Px, Em>,
     pub style: Style,
 }
 
-impl<'a> LayoutSettings<'a> {
-    pub fn new(ctx: &'a FontContext<'a>, font_size: Scale<Px, Em>, style: Style) -> Self {
+impl<'a, 'f> LayoutSettings<'a, 'f> {
+    pub fn new(ctx: &'a FontContext<'f>, font_size: f64, style: Style) -> Self {
         LayoutSettings {
             ctx,
-            font_size,
+            font_size: Scale::new(font_size, Px, Em),
             style,
         }
     }

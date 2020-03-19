@@ -1,8 +1,11 @@
 use crate::error::{Error, Result};
-use crate::font::{Style, style_symbol, AtomType, Symbol};
+use crate::font::{Style, style_symbol, AtomType};
 use crate::lexer::{Lexer, Token};
-use crate::parser::nodes::{Delimited, ParseNode, Accent, Scripts};
-use crate::parser::color::RGBA;
+use crate::parser::{
+    nodes::{Delimited, ParseNode, Accent, Scripts},
+    color::RGBA,
+    symbols::Symbol
+};
 use crate::functions::get_command;
 use crate::environments::Environment;
 use crate::dimensions::*;
@@ -420,7 +423,7 @@ fn codepoint_atom_type(codepoint: char) -> Option<AtomType> {
 
 #[cfg(test)]
 mod tests {
-    use parser::parse;
+    use crate::parser::engine::parse;
 
     #[test]
     fn fractions() {
