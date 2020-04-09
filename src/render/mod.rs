@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::error::{LayoutError, Error};
 use crate::font::MathFont;
 use crate::dimensions::*;
 use crate::layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings, Layout, Grid};
@@ -67,12 +67,12 @@ impl Renderer {
             debug: false,
         }
     }
-    pub fn layout<'a, 'f>(&self, tex: &str, layout_settings: LayoutSettings<'a, 'f>) -> Result<Layout<'f>, Error> {
+    pub fn layout<'s, 'a, 'f>(&self, tex: &'s str, layout_settings: LayoutSettings<'a, 'f>) -> Result<Layout<'f>, Error<'s>> {
         use crate::parser::parse;
         use crate::layout::engine::layout;
 
         let mut parse = parse(tex)?;
-        layout(&mut parse, layout_settings)
+        Ok(layout(&mut parse, layout_settings)?)
     }
     // (x0, y0, x1, y1)
     pub fn size(&self, layout: &Layout) -> (f64, f64, f64, f64) {
@@ -107,12 +107,11 @@ impl Renderer {
     }
 
     fn render_hbox(&self, out: &mut impl Backend, mut pos: Cursor, nodes: &[LayoutNode], height: f64, nodes_width: f64, alignment: Alignment) {
-        if let Alignment::Centered(w) = alignment {
-            pos.x += (nodes_width - w / Px) * 0.5;
-        }
-
         if self.debug {
             out.bbox(pos.up(height), nodes_width, height, Role::HBox);
+        }
+        if let Alignment::Centered(w) = alignment {
+            pos.x += (nodes_width - w / Px) * 0.5;
         }
 
         for node in nodes {

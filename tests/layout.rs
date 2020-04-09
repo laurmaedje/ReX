@@ -1,5 +1,4 @@
 extern crate rex;
-extern crate font_types as font;
 
 #[macro_use]
 extern crate serde_derive;
@@ -46,7 +45,7 @@ fn collect_tests<P: AsRef<Path>>(path: P) -> Tests {
 fn load_history<P: AsRef<Path>>(path: P) -> Vec<Equation> {
     let file = File::open(path.as_ref()).expect("failed to open test collection");
     let mut reader = BufReader::new(file);
-    let tests: Vec<Equation> = bincode::deserialize_from(&mut reader, bincode::Infinite)
+    let tests: Vec<Equation> = bincode::deserialize_from(&mut reader)
         .expect("failed to load historical test results");
 
     tests
@@ -124,7 +123,7 @@ fn save_layout() {
 
     let out = File::create(LAYOUT_BINCODE).expect("failed to create bincode file for layout tests");
     let mut writer = BufWriter::new(out);
-    bincode::serialize_into(&mut writer, &rendered, bincode::Infinite)
+    bincode::serialize_into(&mut writer, &rendered)
         .expect("failed to serialize tex results to bincode");
 
     // With new tests, create a new html

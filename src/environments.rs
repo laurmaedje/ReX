@@ -1,7 +1,7 @@
 use crate::lexer::{Lexer, Token};
 use crate::font::{Style, AtomType};
 use crate::parser::{self, optional_argument_with, required_argument_with, ParseNode, symbols::Symbol};
-use crate::error::{Result, Error};
+use crate::error::{ParseResult, ParseError};
 
 /// An enumeration of recognized enviornmnets.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -32,7 +32,7 @@ impl Environment {
 
     /// Parse the enviornment for a given `Environment`.  This can be thought
     /// of as a parsing primitive.
-    pub fn parse(&self, lex: &mut Lexer, local: Style) -> Result<ParseNode> {
+    pub fn parse<'a>(&self, lex: &mut Lexer<'a>, local: Style) -> ParseResult<'a, ParseNode> {
         match *self {
             Environment::Array => array(lex, local),
             Environment::Matrix => matrix(lex, local),
@@ -126,23 +126,23 @@ pub struct Array {
 }
 
 
-fn matrix(lex: &mut Lexer, style: Style) -> Result<ParseNode> {
+fn matrix<'a>(lex: &mut Lexer<'a>, style: Style) -> ParseResult<'a, ParseNode> {
     matrix_common(lex, style, None, None)
 }
 
-fn matrix_with(lex: &mut Lexer,
+fn matrix_with<'a>(lex: &mut Lexer<'a>,
                style: Style,
                left_delimiter: char,
                right_delimiter: char)
-               -> Result<ParseNode> {
+               -> ParseResult<'a, ParseNode> {
     matrix_common(lex, style, Some(left_delimiter), Some(right_delimiter))
 }
 
-fn matrix_common(lex: &mut Lexer,
+fn matrix_common<'a>(lex: &mut Lexer<'a>,
                  style: Style,
                  left_delimiter: Option<char>,
                  right_delimiter: Option<char>)
-                 -> Result<ParseNode> {
+                 -> ParseResult<'a, ParseNode> {
     // matrix bodies are paresed like arrays.
     let body = array_body(lex, style)?;
     let left_delimiter = left_delimiter.map(|code| {
@@ -174,7 +174,7 @@ fn matrix_common(lex: &mut Lexer,
 ///   - `|` insert a vertical bar at position.
 ///
 /// For example: `\begin{array}{c|c|c}\end{array}`.
-fn array_col(lex: &mut Lexer, _: Style) -> Result<ArrayColumnsFormatting> {
+fn array_col<'a>(lex: &mut Lexer<'a>, _: Style) -> ParseResult<'a, ArrayColumnsFormatting> {
     let mut cols = Vec::new();
     let mut current = ArraySingleColumnFormatting::default();
 
@@ -193,7 +193,7 @@ fn array_col(lex: &mut Lexer, _: Style) -> Result<ArrayColumnsFormatting> {
                 lex.pos -= 1; // backtrack the lexer
                 break;
             }
-            _ => return Err(Error::Todo),
+            _ => return Err(ParseError::Todo),
         }
 
         cols.push(current);
@@ -215,11 +215,11 @@ fn array_col(lex: &mut Lexer, _: Style) -> Result<ArrayColumnsFormatting> {
 /// of the array to the baseline.
 ///
 /// For example: `\begin{array}[t]{cc}..\end{array}`.
-fn array_pos(lex: &mut Lexer, _: Style) -> Result<Option<ArrayVerticalAlign>> {
+fn array_pos<'a>(lex: &mut Lexer<'a>, _: Style) -> ParseResult<'a, Option<ArrayVerticalAlign>> {
     let ret = match lex.current {
         Token::Symbol('t') => Ok(Some(ArrayVerticalAlign::Top)),
         Token::Symbol('b') => Ok(Some(ArrayVerticalAlign::Bottom)),
-        _ => return Err(Error::Todo),
+        _ => return Err(ParseError::Todo),
     };
 
     lex.next();
@@ -234,7 +234,7 @@ fn array_pos(lex: &mut Lexer, _: Style) -> Result<Option<ArrayVerticalAlign>> {
 /// space between the rows.  Note, the last line termination is ignored
 /// if the a line is empty.
 type Expression = Vec<ParseNode>;
-fn array_body(lex: &mut Lexer, style: Style) -> Result<Vec<Vec<Expression>>> {
+fn array_body<'a>(lex: &mut Lexer<'a>, style: Style) -> ParseResult<'a, Vec<Vec<Expression>>> {
     let mut rows: Vec<Vec<Expression>> = Vec::new();
     let mut current: Vec<Expression> = Vec::new();
     loop {
@@ -268,7 +268,7 @@ fn array_body(lex: &mut Lexer, style: Style) -> Result<Vec<Vec<Expression>>> {
 
 /// Parse an array environment.  This method assumes that the lexer is currently
 /// positioned after the `\begin{array}` declaration.
-fn array(lex: &mut Lexer, local: Style) -> Result<ParseNode> {
+fn array<'a>(lex: &mut Lexer<'a>, local: Style) -> ParseResult<'a, ParseNode> {
     let pos = optional_argument_with(lex, local, array_pos)?;
     let cols = required_argument_with(lex, local, array_col)?;
     lex.next();

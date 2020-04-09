@@ -15,7 +15,7 @@ pub use font::math::{
 use pathfinder_content::outline::Outline;
 
 use crate::dimensions::{*};
-use crate::error::Error;
+use crate::error::FontError;
 
 pub type MathFont = OpenTypeFont<Outline>;
 
@@ -27,19 +27,19 @@ pub struct FontContext<'f> {
     pub units_per_em: Scale<Font, Em>,
 }
 impl<'f> FontContext<'f> {
-    pub fn glyph(&self, codepoint: char) -> Result<Glyph<'f>, Error> {
+    pub fn glyph(&self, codepoint: char) -> Result<Glyph<'f>, FontError> {
         use font::Font;
-        let gid = self.font.gid_for_codepoint(codepoint as u32).ok_or(Error::MissingGlyphCodepoint(codepoint))?;
+        let gid = self.font.gid_for_codepoint(codepoint as u32).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
         self.glyph_from_gid(gid.0 as u16)
     }
-    pub fn glyph_from_gid(&self, gid: u16) -> Result<Glyph<'f>, Error> {
+    pub fn glyph_from_gid(&self, gid: u16) -> Result<Glyph<'f>, FontError> {
         use font::{Font};
         use vector::Outline;
         let font = self.font;
-        let hmetrics = font.glyph_metrics(gid).ok_or(Error::MissingGlyphGID(gid))?;
+        let hmetrics = font.glyph_metrics(gid).ok_or(FontError::MissingGlyphGID(gid))?;
         let italics = self.math.glyph_info.italics_correction_info.get(gid).map(|info| info.value).unwrap_or_default();
         let attachment = self.math.glyph_info.top_accent_attachment.get(gid).map(|info| info.value).unwrap_or_default();
-        let glyph = font.glyph(GlyphId(gid as u32)).ok_or(Error::MissingGlyphGID(gid))?;
+        let glyph = font.glyph(GlyphId(gid as u32)).ok_or(FontError::MissingGlyphGID(gid))?;
         let bbox = glyph.path.bounding_box().unwrap();
         let ll = bbox.lower_left();
         let ur = bbox.upper_right();
@@ -59,7 +59,7 @@ impl<'f> FontContext<'f> {
             )
         })
     }
-    pub fn new(font: &'f OpenTypeFont<Outline>) -> Self {
+    pub fn new(font: &'f MathFont) -> Self {
         use font::Font;
         let math = font.math().expect("no MATH tables");
         let font_units_to_em = Scale::new(font.font_matrix().matrix.m11() as f64, Em, Font);
@@ -73,14 +73,14 @@ impl<'f> FontContext<'f> {
             constants
         }
     }
-    pub fn vert_variant(&self, codepoint: char, height: Length<Font>) -> Result<VariantGlyph, Error> {
+    pub fn vert_variant(&self, codepoint: char, height: Length<Font>) -> Result<VariantGlyph, FontError> {
         use font::Font;
-        let GlyphId(gid) = self.font.gid_for_codepoint(codepoint as u32).ok_or(Error::MissingGlyphCodepoint(codepoint))?;
+        let GlyphId(gid) = self.font.gid_for_codepoint(codepoint as u32).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
         Ok(self.math.variants.vert_variant(gid as u16, (height / Font) as u32))
     }
-    pub fn horz_variant(&self, codepoint: char, width: Length<Font>) -> Result<VariantGlyph, Error> {
+    pub fn horz_variant(&self, codepoint: char, width: Length<Font>) -> Result<VariantGlyph, FontError> {
         use font::Font;
-        let GlyphId(gid) = self.font.gid_for_codepoint(codepoint as u32).ok_or(Error::MissingGlyphCodepoint(codepoint))?;
+        let GlyphId(gid) = self.font.gid_for_codepoint(codepoint as u32).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
         Ok(self.math.variants.horz_variant(gid as u16, (width / Font) as u32))
     }
 }

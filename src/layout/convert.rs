@@ -8,14 +8,14 @@ use super::{Style};
 use super::builders;
 use super::{LayoutNode, LayoutVariant, LayoutGlyph};
 use crate::parser::nodes::Rule;
-use crate::error::Error;
+use crate::error::LayoutResult;
 
 pub trait AsLayoutNode<'f> {
-    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> Result<LayoutNode<'f>, Error>;
+    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> LayoutResult<LayoutNode<'f>>;
 }
 
 impl<'f> AsLayoutNode<'f> for Glyph<'f> {
-    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> Result<LayoutNode<'f>, Error> {
+    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> LayoutResult<LayoutNode<'f>> {
         Ok(LayoutNode {
             height: self.height().scaled(config),
             width:  self.advance.scaled(config),
@@ -33,7 +33,7 @@ impl<'f> AsLayoutNode<'f> for Glyph<'f> {
 }
 
 impl<'f> AsLayoutNode<'f> for Rule {
-    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> Result<LayoutNode<'f>, Error> {
+    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> LayoutResult<LayoutNode<'f>> {
         Ok(LayoutNode {
             node:   LayoutVariant::Rule,
             width:  self.width .scaled(config),
@@ -44,7 +44,7 @@ impl<'f> AsLayoutNode<'f> for Rule {
 }
 
 impl<'f> AsLayoutNode<'f> for VariantGlyph {
-    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> Result<LayoutNode<'f>, Error> {
+    fn as_layout<'a>(&self, config: LayoutSettings<'a, 'f>) -> LayoutResult<LayoutNode<'f>> {
         match *self {
             VariantGlyph::Replacement(gid) => {
                 let glyph = config.ctx.glyph_from_gid(gid)?;

@@ -16,16 +16,16 @@ use crate::parser::symbols::Symbol;
 use crate::environments::Array;
 use crate::dimensions::{*};
 use crate::layout;
-use crate::error::Error;
+use crate::error::{LayoutResult, LayoutError};
 
 /// Entry point to our recursive algorithm
-pub fn layout<'a, 'f: 'a>(nodes: &[ParseNode], config: LayoutSettings<'a, 'f>) -> Result<Layout<'f>, Error> {
+pub fn layout<'a, 'f: 'a>(nodes: &[ParseNode], config: LayoutSettings<'a, 'f>) -> LayoutResult<Layout<'f>> {
     layout_recurse(nodes, config, AtomType::Transparent)
 }
 
 /// This method takes the parsing nodes and layouts them to layout nodes.
 #[allow(unconditional_recursion)]
-fn layout_recurse<'a, 'f: 'a>(nodes: &[ParseNode], mut config: LayoutSettings<'a, 'f>, parent_next: AtomType) -> Result<Layout<'f>, Error> {
+fn layout_recurse<'a, 'f: 'a>(nodes: &[ParseNode], mut config: LayoutSettings<'a, 'f>, parent_next: AtomType) -> LayoutResult<Layout<'f>> {
     let mut layout = Layout::new();
     let mut prev = AtomType::Transparent;
 
@@ -77,7 +77,7 @@ fn layout_node<'a, 'f: 'a>(node: &ParseNode, config: LayoutSettings<'a, 'f>) -> 
 }
 
 impl<'f> Layout<'f> {
-    fn dispatch<'a>(&mut self, config: LayoutSettings<'a, 'f>, node: &ParseNode, next: AtomType) -> Result<(), Error> {
+    fn dispatch<'a>(&mut self, config: LayoutSettings<'a, 'f>, node: &ParseNode, next: AtomType) -> LayoutResult<()> {
         match *node {
             ParseNode::Symbol(sym) => self.symbol(sym, config)?,
             ParseNode::Scripts(ref script) => self.scripts(script, config)?,
@@ -103,7 +103,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn symbol<'a>(&mut self, sym: Symbol, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn symbol<'a>(&mut self, sym: Symbol, config: LayoutSettings<'a, 'f>) -> LayoutResult<()> {
         // Operators are handled specially.  We may need to find a larger
         // symbol and vertical center it.
         match sym.atom_type {
@@ -113,7 +113,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn largeop<'a>(&mut self, sym: Symbol, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn largeop<'a>(&mut self, sym: Symbol, config: LayoutSettings<'a, 'f>) -> LayoutResult<()> {
         let glyph = config.ctx.glyph(sym.codepoint)?;
         if config.style > Style::Text {
             let axis_offset = config.ctx.constants.axis_height.scaled(config);
@@ -127,7 +127,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn accent<'a>(&mut self, acc: &Accent, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn accent<'a>(&mut self, acc: &Accent, config: LayoutSettings<'a, 'f>) -> LayoutResult<()> {
         // [ ] The width of the selfing box is the width of the base.
         // [ ] Bottom accents: vertical placement is directly below nucleus,
         //       no correction takes place.
@@ -183,7 +183,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn delimited<'a>(&mut self, delim: &Delimited, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn delimited<'a>(&mut self, delim: &Delimited, config: LayoutSettings<'a, 'f>) -> Result<(), LayoutError> {
         let inner = layout(&delim.inner, config)?.as_node();
 
         let min_height = config.ctx.constants.delimited_sub_formula_min_height * config.font_size;
@@ -240,7 +240,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn scripts<'a>(&mut self, scripts: &Scripts, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn scripts<'a>(&mut self, scripts: &Scripts, config: LayoutSettings<'a, 'f>) -> Result<(), LayoutError> {
         // See: https://tug.org/TUGboat/tb27-1/tb86jackowski.pdf
         //      https://www.tug.org/tugboat/tb30-1/tb94vieth.pdf
         let base = match scripts.base {
@@ -381,7 +381,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn operator_limits<'a>(&mut self, base: Layout<'f>, sup: Layout<'f>, sub: Layout<'f>, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn operator_limits<'a>(&mut self, base: Layout<'f>, sup: Layout<'f>, sub: Layout<'f>, config: LayoutSettings<'a, 'f>) -> Result<(), LayoutError> {
         // Provided that the operator is a simple symbol, we need to account
         // for the italics correction of the symbol.  This how we "center"
         // the superscript and subscript of the limits.
@@ -430,7 +430,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn frac<'a>(&mut self, frac: &GenFraction, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn frac<'a>(&mut self, frac: &GenFraction, config: LayoutSettings<'a, 'f>) -> Result<(), LayoutError> {
         let config = match frac.style {
             MathStyle::NoChange => config.clone(),
             MathStyle::Display => config.with_display(),
@@ -522,7 +522,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn radical<'a>(&mut self, rad: &Radical, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn radical<'a>(&mut self, rad: &Radical, config: LayoutSettings<'a, 'f>) -> Result<(), LayoutError> {
         // reference rule 11 from pg 443 of TeXBook
         let contents = layout(&rad.inner, config.cramped())?.as_node();
 
@@ -561,7 +561,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn substack<'a>(&mut self, stack: &Stack, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn substack<'a>(&mut self, stack: &Stack, config: LayoutSettings<'a, 'f>) -> Result<(), LayoutError> {
         // Don't bother constructing a new node if there is nothing.
         if stack.lines.len() == 0 {
             return Ok(());
@@ -632,7 +632,7 @@ impl<'f> Layout<'f> {
         Ok(())
     }
 
-    fn array<'a>(&mut self, array: &Array, config: LayoutSettings<'a, 'f>) -> Result<(), Error> {
+    fn array<'a>(&mut self, array: &Array, config: LayoutSettings<'a, 'f>) -> Result<(), LayoutError> {
         // TODO: let jot = UNITS_PER_EM / 4;
         let strut_height = Length::new(0.7, Em) * config.font_size; // \strutbox height = 0.7\baseline
         let strut_depth = Length::new(0.3, Em) * config.font_size; // \strutbox depth  = 0.3\baseline

@@ -1,23 +1,11 @@
 use std::fmt;
 use crate::dimensions::Unit;
 use crate::parser::color::RGBA;
-use crate::error::Error;
+use crate::error::{ParseError, ParseResult};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Token<'a> {
     Command(&'a str),
-    Symbol(char),
-    WhiteSpace,
-    EOF,
-}
-
-/// An owned variant of `Token<'a>`. This is only used for
-/// having lifetime-free errors for now.  Once NLL is implemented
-/// it's likely, we can use errors with lifetimes with minimal
-/// change to the codebase.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum OwnedToken {
-    Command(String),
     Symbol(char),
     WhiteSpace,
     EOF,
@@ -37,27 +25,27 @@ impl<'a> Token<'a> {
         }
     }
 
-    pub fn expect(&self, expected: Token<'a>) -> Result<(), Error> {
+    pub fn expect(&self, expected: Token<'a>) -> ParseResult<'a, ()> {
         if *self == expected {
             Ok(())
         } else {
-            Err(Error::ExpectedTokenFound(expected.into(), (*self).into()))
+            Err(ParseError::ExpectedTokenFound(expected, (*self).into()))
         }
     }
 
-    pub fn expect_command(self, expected: &'static str) -> Result<(), Error> {
+    pub fn expect_command(self, expected: &'static str) -> ParseResult<'a, ()> {
         self.expect(Token::Command(expected))
     }
 
-    pub fn expect_symbol(self, expected: char) -> Result<(), Error> {
+    pub fn expect_symbol(self, expected: char) -> ParseResult<'a, ()> {
         self.expect(Token::Symbol(expected))
     }
 
-    pub fn expect_whitespace(self) -> Result<(), Error> {
+    pub fn expect_whitespace(self) -> ParseResult<'a, ()> {
         self.expect(Token::WhiteSpace)
     }
 
-    pub fn expect_eof(self) -> Result<(), Error> {
+    pub fn expect_eof(self) -> ParseResult<'a, ()> {
         self.expect(Token::EOF)
     }
 }
@@ -168,20 +156,20 @@ impl<'a> Lexer<'a> {
     /// that the lexer is currently pointed to the first valid
     /// character in a dimension.  So it may be necessary to
     /// consume_whitespace() prior to using this method.
-    pub fn dimension(&mut self) -> Result<Option<Unit>, Error> {
+    pub fn dimension(&mut self) -> ParseResult<'a, Option<Unit>> {
         // utter crap, rewrite.
         unimplemented!()
     }
 
     /// Expect to find an {<inner>}, and return <inner>
-    pub fn group(&mut self) -> Result<&str, Error> {
+    pub fn group(&mut self) -> ParseResult<'a, &'a str> {
         self.consume_whitespace();
         self.current.expect(Token::Symbol('{'))?;
 
         let start = self.pos;
         let end = match self.input[self.pos..].find('}') {
             Some(pos) => start + pos,
-            None => return Err(Error::NoClosingBracket),
+            None => return Err(ParseError::NoClosingBracket),
         };
 
         // Place cursor immediately after }
@@ -192,7 +180,7 @@ impl<'a> Lexer<'a> {
 
     /// Match a segment of alphanumeric characters.  This method will
     /// return an empty string if there are no alphanumeric characters.
-    pub fn alphanumeric(&mut self) -> &str {
+    pub fn alphanumeric(&mut self) -> &'a str {
         // This method expects that the next "Token" is a sequence of
         // alphanumerics.  Since `current_char` points at the first
         // non-parsed token, we must check the current Token to proceed.
@@ -217,7 +205,7 @@ impl<'a> Lexer<'a> {
     //   2. #RRGGBB (that is a # followed by 6 digits)
     //   3. #RRGGBBAA (that is a # followed by 8 digits)
 
-    pub fn color(&mut self) -> Result<RGBA, Error> {
+    pub fn color(&mut self) -> ParseResult<'a, RGBA> {
         unimplemented!()
     }
 
@@ -244,28 +232,6 @@ impl<'a> fmt::Display for Token<'a> {
             Token::Symbol(c) => write!(f, r"'{}'", c),
             Token::WhiteSpace => write!(f, r"' '"),
             Token::EOF => write!(f, "EOF"),
-        }
-    }
-}
-
-impl<'a> fmt::Display for OwnedToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            OwnedToken::Command(ref cmd) => write!(f, r#""\{}""#, cmd),
-            OwnedToken::Symbol(c) => write!(f, r"'{}'", c),
-            OwnedToken::WhiteSpace => write!(f, r"' '"),
-            OwnedToken::EOF => write!(f, "EOF"),
-        }
-    }
-}
-
-impl<'a> From<Token<'a>> for OwnedToken {
-    fn from(tok: Token<'a>) -> OwnedToken {
-        match tok {
-            Token::Command(cmd) => OwnedToken::Command(cmd.into()),
-            Token::Symbol(c) => OwnedToken::Symbol(c),
-            Token::WhiteSpace => OwnedToken::WhiteSpace,
-            Token::EOF => OwnedToken::EOF,
         }
     }
 }

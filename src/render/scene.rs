@@ -3,7 +3,7 @@ use pathfinder_renderer::scene::Scene;
 use pathfinder_content::outline::Outline as PaOutline;
 use pathfinder_geometry::transform2d::Transform2F;
 use super::{Backend, Cursor, Role};
-use vector::{PathBuilder, Rect, Vector, Surface, PathStyle, Paint, FillRule, Outline};
+use vector::{PathBuilder, Rect, Vector, Surface, PathStyle, Paint, FillRule, Outline, LineStyle, LineJoin, LineCap };
 use crate::font::MathFont;
 use crate::parser::{color::RGBA};
 
@@ -47,7 +47,7 @@ impl<'a> Backend for SceneWrapper<'a> {
         };
         let style = self.scene.build_style(PathStyle {
             fill: None,
-            stroke: Some((Paint::Solid(color), 0.1)),
+            stroke: Some((Paint::Solid(color), LineStyle { cap: LineCap::Square, join: LineJoin::Bevel, width: 0.1 })),
             fill_rule: FillRule::NonZero
         });
         let mut b = PathBuilder::new();

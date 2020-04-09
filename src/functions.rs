@@ -6,7 +6,7 @@ use crate::parser as parse;
 use crate::parser::nodes::{ParseNode, Radical, MathStyle, GenFraction, Rule, BarThickness, AtomChange,
                     Color, Stack};
 use crate::parser::color::RGBA;
-use crate::error::{Error, Result};
+use crate::error::{ParseError, ParseResult};
 use crate::parser::symbols::Symbol;
 
 
@@ -43,7 +43,7 @@ pub enum Command {
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 impl Command {
-    pub fn parse(self, lex: &mut Lexer, local: Style) -> Result<ParseNode> {
+    pub fn parse<'a>(self, lex: &mut Lexer<'a>, local: Style) -> ParseResult<'a, ParseNode> {
         use self::Command::*;
         match self {
             Radical              => radical(lex, local),
@@ -168,12 +168,12 @@ pub fn get_command(name: &str) -> Option<Command> {
     Some(command)
 }
 
-fn radical(lex: &mut Lexer, local: Style) -> Result<ParseNode> {
+fn radical<'a>(lex: &mut Lexer<'a>, local: Style) -> ParseResult<'a, ParseNode> {
     let inner = parse::required_argument(lex, local)?;
     Ok(ParseNode::Radical(Radical { inner }))
 }
 
-fn rule(lex: &mut Lexer, _: Style) -> Result<ParseNode> {
+fn rule<'a>(lex: &mut Lexer<'a>, _: Style) -> ParseResult<'a, ParseNode> {
     lex.consume_whitespace();
     let width = lex.dimension()?
         .expect("Unable to parse dimension for Rule.");
@@ -183,37 +183,37 @@ fn rule(lex: &mut Lexer, _: Style) -> Result<ParseNode> {
     Ok(ParseNode::Rule(Rule { width, height }))
 }
 
-fn v_extend(lex: &mut Lexer, local: Style) -> Result<ParseNode> {
+fn v_extend<'a>(lex: &mut Lexer<'a>, local: Style) -> ParseResult<'a, ParseNode> {
     let arg = parse::required_argument_with(lex, local, parse::symbol)?;
     let sym = match arg {
         Some(ParseNode::Symbol(sym)) => sym,
 
         // TODO: add better error
-        _ => return Err(Error::ExpectedOpenGroup),
+        _ => return Err(ParseError::ExpectedOpenGroup),
     };
 
     let height = parse::required_argument_with(lex, local, parse::dimension)?;
     Ok(ParseNode::Extend(sym.codepoint, height))
 }
 
-fn color(lex: &mut Lexer, local: Style) -> Result<ParseNode> {
+fn color<'a>(lex: &mut Lexer<'a>, local: Style) -> ParseResult<'a, ParseNode> {
     let color = parse::required_argument_with(lex, local, parse::color)?;
     let inner = parse::required_argument(lex, local)?;
     Ok(ParseNode::Color(Color { color, inner }))
 }
 
-fn color_lit(lex: &mut Lexer, local: Style, color: RGBA) -> Result<ParseNode> {
+fn color_lit<'a>(lex: &mut Lexer<'a>, local: Style, color: RGBA) -> ParseResult<'a, ParseNode> {
     let inner = parse::required_argument(lex, local)?;
     Ok(ParseNode::Color(Color { color, inner }))
 }
 
-fn fraction(lex: &mut Lexer,
+fn fraction<'a>(lex: &mut Lexer<'a>,
             local: Style,
             left_delimiter: Option<Symbol>,
             right_delimiter: Option<Symbol>,
             bar_thickness: BarThickness,
             style: MathStyle)
-            -> Result<ParseNode> {
+            -> ParseResult<'a, ParseNode> {
     let numerator = parse::required_argument(lex, local)?;
     let denominator = parse::required_argument(lex, local)?;
 
@@ -227,25 +227,25 @@ fn fraction(lex: &mut Lexer,
                               }))
 }
 
-fn delimiter_size(lex: &mut Lexer, local: Style, _: u8, atom_type: AtomType) -> Result<ParseNode> {
+fn delimiter_size<'a>(lex: &mut Lexer<'a>, local: Style, _: u8, atom_type: AtomType) -> ParseResult<'a, ParseNode> {
     let symbol = parse::expect_type(lex, local, atom_type)?;
     Ok(ParseNode::Symbol(symbol))
 }
 
-fn kerning(_: &mut Lexer, _: Style, unit: Unit) -> Result<ParseNode> {
+fn kerning<'a>(_: &mut Lexer<'a>, _: Style, unit: Unit) -> ParseResult<'a, ParseNode> {
     Ok(ParseNode::Kerning(unit))
 }
 
-fn style(_: &mut Lexer, _: Style, new_style: LayoutStyle) -> Result<ParseNode> {
+fn style<'a>(_: &mut Lexer<'a>, _: Style, new_style: LayoutStyle) -> ParseResult<'a, ParseNode> {
     Ok(ParseNode::Style(new_style))
 }
 
-fn atom_change(lex: &mut Lexer, local: Style, at: AtomType) -> Result<ParseNode> {
+fn atom_change<'a>(lex: &mut Lexer<'a>, local: Style, at: AtomType) -> ParseResult<'a, ParseNode> {
     let inner = parse::required_argument(lex, local)?;
     Ok(ParseNode::AtomChange(AtomChange { at, inner }))
 }
 
-fn text_operator(_: &mut Lexer, _: Style, text: &str, limits: bool) -> Result<ParseNode> {
+fn text_operator<'a>(_: &mut Lexer<'a>, _: Style, text: &str, limits: bool) -> ParseResult<'a, ParseNode> {
     const SMALL_SKIP: Unit = Unit::Em(3f64 / 18f64);
     let at = AtomType::Operator(limits);
     let mut inner = Vec::with_capacity(text.len());
@@ -268,9 +268,9 @@ fn text_operator(_: &mut Lexer, _: Style, text: &str, limits: bool) -> Result<Pa
     Ok(ParseNode::AtomChange(AtomChange { at, inner }))
 }
 
-fn substack(lex: &mut Lexer, local: Style, atom_type: AtomType) -> Result<ParseNode> {
+fn substack<'a>(lex: &mut Lexer<'a>, local: Style, atom_type: AtomType) -> ParseResult<'a, ParseNode> {
     if lex.current != Token::Symbol('{') {
-        return Err(Error::StackMustFollowGroup);
+        return Err(ParseError::StackMustFollowGroup);
     }
 
     let mut lines: Vec<Vec<ParseNode>> = Vec::new();
@@ -282,7 +282,7 @@ fn substack(lex: &mut Lexer, local: Style, atom_type: AtomType) -> Result<ParseN
         match lex.current {
             Token::Symbol('}') => break,
             Token::Command(r"\") => lex.next(),
-            _ => return Err(Error::Todo),
+            _ => return Err(ParseError::Todo),
         };
     }
 

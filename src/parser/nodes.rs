@@ -1,6 +1,6 @@
 use crate::dimensions::{Unit};
 use crate::layout::Style;
-use crate::error::Error;
+use crate::error::{ParseResult, ParseError};
 use super::color::RGBA;
 use crate::environments::Array;
 use crate::font::{AtomType};
@@ -104,26 +104,26 @@ pub enum MathStyle {
 }
 
 impl ParseNode {
-    pub fn expect_left(self) -> Result<Symbol, Error> {
+    pub fn expect_left(self) -> ParseResult<'static, Symbol> {
         if let ParseNode::Symbol(sym) = self {
             if sym.atom_type == AtomType::Open || sym.atom_type == AtomType::Fence ||
                sym.codepoint == '.' {
                 return Ok(sym);
             } else {
-                return Err(Error::ExpectedOpen(sym));
+                return Err(ParseError::ExpectedOpen(sym));
             }
         } else {
             unreachable!()
         }
     }
 
-    pub fn expect_right(self) -> Result<Symbol, Error> {
+    pub fn expect_right(self) -> ParseResult<'static, Symbol> {
         if let ParseNode::Symbol(sym) = self {
             if sym.atom_type == AtomType::Close || sym.atom_type == AtomType::Fence ||
                sym.codepoint == '.' {
                 return Ok(sym);
             } else {
-                return Err(Error::ExpectedClose(sym));
+                return Err(ParseError::ExpectedClose(sym));
             }
         } else {
             unreachable!()
