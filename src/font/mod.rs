@@ -2,7 +2,6 @@ pub mod kerning;
 mod style;
 //mod unit;
 
-use unicode_math::SYMBOLS;
 pub use unicode_math::AtomType;
 pub use style::style_symbol;
 
@@ -12,7 +11,6 @@ pub use font::math::{
     MathConstants,
     assembly::VariantGlyph
 };
-use pathfinder_content::outline::Outline;
 
 use crate::dimensions::{*};
 use crate::error::FontError;
@@ -34,13 +32,12 @@ impl<'f> FontContext<'f> {
     }
     pub fn glyph_from_gid(&self, gid: u16) -> Result<Glyph<'f>, FontError> {
         use font::{Font};
-        use vector::Outline;
         let font = self.font;
         let hmetrics = font.glyph_metrics(gid).ok_or(FontError::MissingGlyphGID(gid))?;
         let italics = self.math.glyph_info.italics_correction_info.get(gid).map(|info| info.value).unwrap_or_default();
         let attachment = self.math.glyph_info.top_accent_attachment.get(gid).map(|info| info.value).unwrap_or_default();
         let glyph = font.glyph(GlyphId(gid as u32)).ok_or(FontError::MissingGlyphGID(gid))?;
-        let bbox = glyph.path.bounding_box().unwrap();
+        let bbox = glyph.path.bounds();
         let ll = bbox.lower_left();
         let ur = bbox.upper_right();
 

@@ -1,11 +1,11 @@
 
 use pathfinder_renderer::{
-    scene::{Scene, DrawMode, DrawPath},
+    scene::{Scene, DrawPath},
     paint::{Paint, PaintId},
 };
 use pathfinder_content::{
-    outline::Outline,
-    stroke::{StrokeStyle, LineCap, LineJoin},
+    outline::{Outline},
+    stroke::{StrokeStyle, LineCap, LineJoin, OutlineStrokeToFill},
 };
 use pathfinder_geometry::{
     transform2d::Transform2F,
@@ -53,16 +53,16 @@ impl<'a> Backend for SceneWrapper<'a> {
             Role::VBox => ColorU::new(0, 0, 200, 255),
         };
         let paint = self.scene.push_paint(&Paint::from_color(color));
-        let style = PathStyleDrawMode::Stroke(
-            paint,
-            StrokeStyle {
-                line_cap: LineCap::Square,
-                line_join: LineJoin::Bevel,
-                line_width: 0.1
-            }
-        );
+        let style = StrokeStyle {
+            line_cap: LineCap::Square,
+            line_join: LineJoin::Bevel,
+            line_width: 0.1
+        };
         let outline = Outline::from_rect(RectF::new(v_cursor(pos), v_xy(width, height)));
-        style.draw(self.scene, outline.transformed(&self.transform), None);
+        let mut stroke = OutlineStrokeToFill::new(&outline, style);
+        stroke.offset();
+        let outline = stroke.into_outline().transformed(&self.transform);
+        self.scene.push_draw_path(DrawPath::new(outline, paint));
     }
     fn symbol(&mut self, pos: Cursor, gid: u16, scale: f64, font: &MathFont) {
         use font::{Font, GlyphId};

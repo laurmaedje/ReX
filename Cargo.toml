@@ -10,7 +10,6 @@ edition = "2018"
 [dependencies]
 font = { git = "https://github.com/pdf-rs/font" }
 pathfinder_geometry = { git = "https://github.com/s3bk/pathfinder/" }
-pathfinder_canvas = { git = "https://github.com/s3bk/pathfinder/" }
 pathfinder_color = { git = "https://github.com/s3bk/pathfinder/" }
 pathfinder_content = { git = "https://github.com/s3bk/pathfinder/" }
 pathfinder_renderer = { git = "https://github.com/s3bk/pathfinder/" }
