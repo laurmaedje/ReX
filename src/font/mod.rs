@@ -17,7 +17,7 @@ use pathfinder_content::outline::Outline;
 use crate::dimensions::{*};
 use crate::error::FontError;
 
-pub type MathFont = OpenTypeFont<Outline>;
+pub type MathFont = OpenTypeFont;
 
 #[derive(Clone)]
 pub struct FontContext<'f> {
