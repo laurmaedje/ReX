@@ -1,5 +1,3 @@
-use static_map;
-
 #[derive(Serialize, Deserialize)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct RGBA(pub u8, pub u8, pub u8, pub u8);
@@ -8,10 +6,21 @@ impl RGBA {
     pub fn has_alpha(&self) -> bool {
         self.3 != 0xff
     }
+    pub fn from_name(name: &str) -> Option<RGBA> {
+        match COLOR_MAP.binary_search_by_key(&name, |&(name, color)| name) {
+            Ok(idx) => Some(COLOR_MAP[idx].1),
+            _ => None
+        }
+    }
 }
 
-pub static COLOR_MAP: static_map::Map<&'static str, RGBA> = static_map! {
-    Default: RGBA(0x00,0x00,0x00,0xff),
+macro_rules! map {
+    ($($key:expr => $val:expr,)*) => {
+        &[$(($key, $val)),*]
+    };
+}
+
+static COLOR_MAP: &[(&'static str, RGBA)] = map!{
     "black" => RGBA(0x00,0x00,0x00,0xff),
     "silver" => RGBA(0xc0,0xc0,0xc0,0xff),
     "gray" => RGBA(0x80,0x80,0x80,0xff),

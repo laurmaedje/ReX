@@ -5,11 +5,6 @@ extern crate serde_derive;
 extern crate log;
 
 #[macro_use]
-extern crate static_map;
-#[macro_use]
-extern crate static_map_macros;
-
-#[macro_use]
 mod macros;
 
 pub mod environments;

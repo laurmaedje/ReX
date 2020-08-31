@@ -5,8 +5,8 @@ mod style;
 pub use unicode_math::AtomType;
 pub use style::style_symbol;
 
-use font::{OpenTypeFont, MathHeader, GlyphId};
-pub use font::math::{
+use font::{opentype::{OpenTypeFont, math::MathHeader}, GlyphId};
+pub use font::opentype::math::{
     assembly::{Direction},
     MathConstants,
     assembly::VariantGlyph
@@ -44,8 +44,8 @@ impl<'f> FontContext<'f> {
         Ok(Glyph {
             gid,
             font: self.font,
-            advance: Length::new(hmetrics.advance.x(), Font),
-            lsb: Length::new(hmetrics.lsb.x(), Font),
+            advance: Length::new(hmetrics.advance, Font),
+            lsb: Length::new(hmetrics.lsb, Font),
             italics: Length::new(italics, Font),
             attachment: Length::new(attachment, Font),
             bbox: (
@@ -58,7 +58,7 @@ impl<'f> FontContext<'f> {
     }
     pub fn new(font: &'f MathFont) -> Self {
         use font::Font;
-        let math = font.math().expect("no MATH tables");
+        let math = font.math.as_ref().expect("no MATH tables");
         let font_units_to_em = Scale::new(font.font_matrix().matrix.m11() as f64, Em, Font);
         let units_per_em = font_units_to_em.inv();
         let constants = Constants::new(&math.constants, font_units_to_em);

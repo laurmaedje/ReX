@@ -373,10 +373,9 @@ pub fn dimension<'a>(_: &mut Lexer<'a>, _: Style) -> ParseResult<'a, Unit> {
 // TODO: implement parsing for other formats.
 pub fn color<'a>(lex: &mut Lexer<'a>, _: Style) -> ParseResult<'a, RGBA> {
     let color_str = lex.alphanumeric();
-    let color = crate::parser::color::COLOR_MAP
-        .get(color_str)
+    let color = RGBA::from_name(color_str)
         .ok_or_else(|| ParseError::UnrecognizedColor(color_str.into()))?;
-    Ok(*color)
+    Ok(color)
 }
 
 pub fn environment_name<'a>(lex: &mut Lexer<'a>, _: Style) -> ParseResult<'a, Environment> {

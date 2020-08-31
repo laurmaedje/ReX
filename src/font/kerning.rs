@@ -61,8 +61,7 @@ pub fn subscript_kern(base: &Glyph, script: &Glyph, shift: Length<Font>) -> Leng
 }
 
 fn kern_from(glyph: &Glyph, height: Length<Font>, side: Corner) -> Length<Font> {
-    use font::Font;
-    let math = glyph.font.math().unwrap();
+    let math = glyph.font.math.as_ref().unwrap();
     let record = match math.glyph_info.kern_info.entries.get(&glyph.gid) {
         Some(record) => record,
         None => return Length::zero(),
