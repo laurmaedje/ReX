@@ -96,7 +96,7 @@ use crate::layout::{LayoutSettings, Style};
 use pathfinder_export::{Export, FileFormat};
 
 pub fn svg(font: &[u8], tex: &str) -> Vec<u8> {
-    let font = MathFont::parse(font);
+    let font = MathFont::parse(font).unwrap();
     let ctx = FontContext::new(&font);
     let mut renderer = Renderer::new();
     renderer.debug = true;
