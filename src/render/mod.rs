@@ -1,8 +1,8 @@
 use crate::error::{LayoutError, Error};
-use crate::font::MathFont;
+pub use crate::font::MathFont;
 use crate::dimensions::*;
 use crate::layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings, Layout, Grid};
-use crate::parser::{color::RGBA};
+pub use crate::parser::{color::RGBA};
 
 pub struct Renderer {
     pub debug: bool,
