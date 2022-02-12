@@ -1,7 +1,7 @@
 use std::fs;
 use pathfinder_export::{Export, FileFormat};
 use pathfinder_renderer::scene::Scene;
-use vector::{Rect, Vector};
+use pathfinder_geometry::{rect::RectF, vector::vec2f};
 use rex::{
     render::{Renderer, SceneWrapper},
     layout::{Grid, Layout, engine, LayoutSettings, Style},
@@ -23,9 +23,6 @@ const SAMPLES: &[&str] = &[
     r"\mathop{\mathrm{lim\,sup}}\limits_{x\rightarrow\infty}\ \mathop{\mathrm{sin}}(x)\mathrel{\mathop{=}\limits^?}1"
 ];
 
-fn v_xy(x: f64, y: f64) -> Vector {
-    Vector::new(x as f32, y as f32)
-}
 
 fn main() {
     env_logger::init();
@@ -35,8 +32,8 @@ fn main() {
     let fonts: Vec<_> = fs::read_dir("fonts").unwrap()
         .filter_map(|e| e.ok())
         .filter_map(|entry| fs::read(entry.path()).ok())
-        .map(|data| OpenTypeFont::parse(&data))
-        .filter(|font| font.math().is_some())
+        .filter_map(|data| OpenTypeFont::parse(&data).ok())
+        .filter(|font| font.math.is_some())
         .collect();
 
     let mut grid = Grid::new();
@@ -57,7 +54,7 @@ fn main() {
     let mut renderer = Renderer::new();
     let (x0, y0, x1, y1) = renderer.size(&layout);
     let mut scene = Scene::new();
-    scene.set_view_box(Rect::from_points(v_xy(x0, y0), v_xy(x1, y1)));
+    scene.set_view_box(RectF::from_points(vec2f(x0 as f32, y0 as f32), vec2f(x1 as f32, y1 as f32)));
     let mut backend = SceneWrapper::new(&mut scene);
     renderer.render(&layout, &mut backend);
     
