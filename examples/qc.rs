@@ -8,7 +8,7 @@ use rex::{
     parser::parse,
     font::FontContext
 };
-use font::OpenTypeFont;
+use font::{Font, OpenTypeFont};
 
 const SAMPLES: &[&str] = &[
     r"\iint \sqrt{1 + f^2(x,t,t)}\,\mathrm{d}x\mathrm{d}y\mathrm{d}t = \sum \xi(t)",
@@ -26,24 +26,30 @@ const SAMPLES: &[&str] = &[
 
 fn main() {
     env_logger::init();
-    use font::Font;
 
     let samples: Vec<_> = SAMPLES.iter().cloned().map(|tex| parse(dbg!(tex)).unwrap()).collect();
     let fonts: Vec<_> = fs::read_dir("fonts").unwrap()
         .filter_map(|e| e.ok())
-        .filter_map(|entry| fs::read(entry.path()).ok())
-        .filter_map(|data| OpenTypeFont::parse(&data).ok())
-        .filter(|font| font.math.is_some())
+        .filter_map(|entry| {
+            fs::read(entry.path()).ok()
+            .and_then(|data| font::parse(&data).ok().and_then(|f| f.downcast_box::<OpenTypeFont>().ok()))
+            .map(|font| (font, entry.path()))
+        })
+        .filter(|(font, path)| font.math.is_some())
         .collect();
 
     let mut grid = Grid::new();
-    for (row, font) in fonts.iter().enumerate() {
+    for (row, (font, path)) in fonts.iter().enumerate() {
         let ctx = FontContext::new(&font);
         let layout_settings = LayoutSettings::new(&ctx, 10.0, Style::Display);
 
+        let name = format!("\\mathtt{{{}}}", path.file_name().unwrap().to_str().unwrap());
+        if let Ok(node) = engine::layout(&parse(&name).unwrap(), layout_settings).map(|l| l.as_node()) {
+            grid.insert(row, 0, node);
+        }
         for (column, sample) in samples.iter().enumerate() {
             if let Ok(node) = engine::layout(sample, layout_settings).map(|l| l.as_node()) {
-                grid.insert(row, column, node);
+                grid.insert(row, column+1, node);
             }
         }
     }

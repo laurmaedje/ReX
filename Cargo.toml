@@ -8,7 +8,7 @@ authors = [
 edition = "2018"
 
 [dependencies]
-font = { git = "https://github.com/pdf-rs/font" }
+font = { git = "https://github.com/pdf-rs/font", features=["woff"] }
 pathfinder_geometry = { git = "https://github.com/servo/pathfinder/" }
 pathfinder_color = { git = "https://github.com/servo/pathfinder/" }
 pathfinder_content = { git = "https://github.com/servo/pathfinder/" }
