@@ -205,7 +205,7 @@ impl<'f> fmt::Debug for LayoutGlyph<'f> {
 impl<'f> fmt::Debug for LayoutNode<'f> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.node {
-            LayoutVariant::Grid(ref grid) =>  write!(f, "Grid(..)"),
+            LayoutVariant::Grid(_) =>  write!(f, "Grid(..)"),
             LayoutVariant::HorizontalBox(ref hb) => write!(f, "HBox({:?})", hb.contents),
             LayoutVariant::VerticalBox(ref vb) => write!(f, "VBox({:?})", vb.contents),
             LayoutVariant::Glyph(ref gly) => write!(f, "Glyph({:?})", gly),
@@ -268,7 +268,6 @@ pub fn is_symbol<'a, 'b: 'a>(contents: &'a [LayoutNode<'b>]) -> Option<LayoutGly
 /// Display styles which are used in scaling glyphs.  The associated
 /// methods are taken from pg.441 from the TeXBook
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Style {
     ScriptScriptCramped,

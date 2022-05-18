@@ -2,7 +2,7 @@ use std::cmp::{min, max};
 
 use super::builders;
 use super::convert::AsLayoutNode;
-use super::{Alignment, Layout, LayoutNode, LayoutSettings, LayoutVariant, Style, ColorChange};
+use super::{Alignment, Layout, LayoutNode, LayoutSettings, LayoutVariant, Style};
 
 use crate::font::{
     kerning::{superscript_kern, subscript_kern},
@@ -72,7 +72,7 @@ fn layout_recurse<'a, 'f: 'a>(nodes: &[ParseNode], mut config: LayoutSettings<'a
 
 fn layout_node<'a, 'f: 'a>(node: &ParseNode, config: LayoutSettings<'a, 'f>) -> Layout<'f> {
     let mut layout = Layout::new();
-    layout.dispatch(config, node, AtomType::Transparent);
+    layout.dispatch(config, node, AtomType::Transparent).ok();
     layout.finalize()
 }
 
@@ -98,7 +98,7 @@ impl<'f> Layout<'f> {
                 self.add_node(builders::color(inner, clr))
             }
 
-            _ => warn!("ignored ParseNode: {:?}", node),
+            _ => {}
         }
         Ok(())
     }
@@ -179,7 +179,7 @@ impl<'f> Layout<'f> {
         self.add_node(vbox!(hbox!(kern!(horz: base_offset - acc_offset), accent),
                             kern!(vert: delta),
                             base.as_node()));
-        
+
         Ok(())
     }
 
@@ -262,7 +262,7 @@ impl<'f> Layout<'f> {
         // This is where he handle Operators with limits.
         if let Some(ref b) = scripts.base {
             if AtomType::Operator(true) == b.atom_type() {
-                self.operator_limits(base, sup, sub, config);
+                self.operator_limits(base, sup, sub, config).ok();
                 return Ok(());
             }
         }
@@ -367,7 +367,7 @@ impl<'f> Layout<'f> {
         }
 
         contents.set_offset(adjust_down);
-        if scripts.subscript.is_some() { 
+        if scripts.subscript.is_some() {
             if !sub_kern.is_zero() {
                 sub.contents.insert(0, kern!(horz: sub_kern));
                 sub.width += sub_kern;
@@ -377,7 +377,7 @@ impl<'f> Layout<'f> {
 
         self.add_node(base.as_node());
         self.add_node(contents.build());
-        
+
         Ok(())
     }
 
@@ -426,7 +426,7 @@ impl<'f> Layout<'f> {
                 sub.as_node()
             ]
         ]);
-        
+
         Ok(())
     }
 
@@ -518,7 +518,7 @@ impl<'f> Layout<'f> {
         self.add_node(left);
         self.add_node(inner);
         self.add_node(right);
-        
+
         Ok(())
     }
 
@@ -557,7 +557,7 @@ impl<'f> Layout<'f> {
                             rule!(width:  contents.width, height: rule_thickness),
                             kern!(vert: gap),
                             contents]);
-        
+
         Ok(())
     }
 
@@ -628,7 +628,7 @@ impl<'f> Layout<'f> {
         let offset = (vbox.height + vbox.depth) * 0.5 - config.ctx.constants.axis_height.scaled(config);
         vbox.set_offset(offset);
         self.add_node(vbox.build());
-        
+
         Ok(())
     }
 

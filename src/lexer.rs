@@ -93,7 +93,6 @@ impl<'a> Lexer<'a> {
             None => Token::EOF,
         };
 
-        debug!("{:?}", self.current);
         self.current
     }
 

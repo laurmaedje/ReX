@@ -1,7 +1,7 @@
-use crate::error::{LayoutError, Error};
+use crate::error::Error;
 pub use crate::font::MathFont;
 use crate::dimensions::*;
-use crate::layout::{LayoutNode, LayoutVariant, Alignment, Style, LayoutSettings, Layout, Grid};
+use crate::layout::{LayoutNode, LayoutVariant, Alignment, LayoutSettings, Layout, Grid};
 pub use crate::parser::{color::RGBA};
 
 pub struct Renderer {
@@ -48,7 +48,7 @@ impl Cursor {
 }
 
 pub trait Backend {
-    fn bbox(&mut self, _pos: Cursor, _width: f64, _height: f64, role: Role) {}
+    fn bbox(&mut self, _pos: Cursor, _width: f64, _height: f64, _: Role) {}
     fn symbol(&mut self, pos: Cursor, gid: u16, scale: f64, ctx: &MathFont);
     fn rule(&mut self, pos: Cursor, width: f64, height: f64);
     fn begin_color(&mut self, color: RGBA);
@@ -91,12 +91,11 @@ impl Renderer {
         self.render_hbox(out, pos, &layout.contents, layout.height / Px, layout.width / Px, Alignment::Default);
     }
 
-    fn render_grid(&self, out: &mut impl Backend, pos: Cursor, width: f64, height: f64, grid: &Grid) {
+    fn render_grid(&self, out: &mut impl Backend, pos: Cursor, _: f64, _: f64, grid: &Grid) {
         let x_offsets = grid.x_offsets();
         let y_offsets = grid.y_offsets();
         for (&(row, column), node) in grid.contents.iter() {
-            let width = grid.columns[column];
-            let (height, depth) = grid.rows[row];
+            let (height, _) = grid.rows[row];
 
             self.render_node(
                 out,
@@ -191,6 +190,3 @@ impl Renderer {
 
     }
 }
-
-pub mod scene;
-pub use scene::SceneWrapper;

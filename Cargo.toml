@@ -8,21 +8,5 @@ authors = [
 edition = "2018"
 
 [dependencies]
-font = { git = "https://github.com/pdf-rs/font", features=["woff"] }
-pathfinder_geometry = { git = "https://github.com/servo/pathfinder/" }
-pathfinder_color = { git = "https://github.com/servo/pathfinder/" }
-pathfinder_content = { git = "https://github.com/servo/pathfinder/" }
-pathfinder_renderer = { git = "https://github.com/servo/pathfinder/" }
-pathfinder_export = { git = "https://github.com/servo/pathfinder/" }
+font = { git = "https://github.com/pdf-rs/font" }
 unicode-math = { git = "https://github.com/s3bk/unicode-math/" }
-
-serde_derive = "1.0"
-serde = "1.0"
-
-[dev-dependencies]
-serde_yaml = "0.7"
-bincode = "1.2.1"
-env_logger = "*"
-
-[dependencies.log]
-version="0.4.8"

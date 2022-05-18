@@ -269,12 +269,10 @@ fn array_body<'a>(lex: &mut Lexer<'a>, style: Style) -> ParseResult<'a, Vec<Vec<
 /// Parse an array environment.  This method assumes that the lexer is currently
 /// positioned after the `\begin{array}` declaration.
 fn array<'a>(lex: &mut Lexer<'a>, local: Style) -> ParseResult<'a, ParseNode> {
-    let pos = optional_argument_with(lex, local, array_pos)?;
+    let _ = optional_argument_with(lex, local, array_pos)?;
     let cols = required_argument_with(lex, local, array_col)?;
     lex.next();
     let contents = array_body(lex, local)?;
-    debug!("Array, pos: {:?}, cols: {:?}", pos, cols);
-    debug!("Contents: {:#?}", contents);
     Ok(ParseNode::Array(Array {
                             col_format: cols,
                             rows: contents,
