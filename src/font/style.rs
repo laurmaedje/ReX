@@ -90,7 +90,36 @@ pub fn style_symbol(codepoint: char, style: Style) -> char {
 fn style_lookup(lut: &[u32], codepoint: u32, style: Style) -> u32 {
     let y = style.family as usize;
     let x = style.weight as usize;
-    codepoint + lut[4 * y + x]
+    let cp = codepoint + lut[4 * y + x];
+
+    // Fix up codepoints that are defined in previous Unicode Blocks.
+    match cp {
+        0x1D455 => 0x210E,
+        0x1D49D => 0x212C,
+        0x1D4A0 => 0x2130,
+        0x1D4A1 => 0x2131,
+        0x1D4A3 => 0x210B,
+        0x1D4A4 => 0x2110,
+        0x1D4A7 => 0x2112,
+        0x1D4A8 => 0x2133,
+        0x1D4AD => 0x211B,
+        0x1D4BA => 0x212F,
+        0x1D4BC => 0x210A,
+        0x1D4C4 => 0x2134,
+        0x1D506 => 0x212D,
+        0x1D50B => 0x210C,
+        0x1D50C => 0x2111,
+        0x1D515 => 0x211C,
+        0x1D51D => 0x2128,
+        0x1D53A => 0x2102,
+        0x1D53F => 0x210D,
+        0x1D545 => 0x2115,
+        0x1D547 => 0x2119,
+        0x1D548 => 0x211A,
+        0x1D549 => 0x211D,
+        0x1D551 => 0x2124,
+        cp => cp,
+    }
 }
 
 // TODO: Investigate these symbols.

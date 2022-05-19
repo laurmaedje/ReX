@@ -56,19 +56,19 @@ impl<'f> FontContext<'f> {
             )
         })
     }
-    pub fn new(font: &'f MathFont) -> Self {
+    pub fn new(font: &'f MathFont) -> Option<Self> {
         use font::Font;
-        let math = font.math.as_ref().expect("no MATH tables");
+        let math = font.math.as_ref()?;
         let font_units_to_em = Scale::new(font.font_matrix().matrix.m11() as f64, Em, Font);
         let units_per_em = font_units_to_em.inv();
         let constants = Constants::new(&math.constants, font_units_to_em);
 
-        FontContext {
+        Some(FontContext {
             font,
             math,
             units_per_em,
             constants
-        }
+        })
     }
     pub fn vert_variant(&self, codepoint: char, height: Length<Font>) -> Result<VariantGlyph, FontError> {
         use font::Font;
