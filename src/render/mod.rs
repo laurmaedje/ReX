@@ -1,5 +1,4 @@
 use crate::error::Error;
-pub use crate::font::MathFont;
 use crate::dimensions::*;
 use crate::layout::{LayoutNode, LayoutVariant, Alignment, LayoutSettings, Layout, Grid};
 pub use crate::parser::{color::RGBA};
@@ -49,7 +48,7 @@ impl Cursor {
 
 pub trait Backend {
     fn bbox(&mut self, _pos: Cursor, _width: f64, _height: f64, _: Role) {}
-    fn symbol(&mut self, pos: Cursor, gid: u16, scale: f64, ctx: &MathFont);
+    fn symbol(&mut self, pos: Cursor, gid: u16, scale: f64);
     fn rule(&mut self, pos: Cursor, width: f64, height: f64);
     fn begin_color(&mut self, color: RGBA);
     fn end_color(&mut self);
@@ -144,7 +143,7 @@ impl Renderer {
                     if self.debug {
                         out.bbox(pos, node.width / Px, (node.height - node.depth) / Px, Role::Glyph);
                     }
-                    out.symbol(pos.down(node.height / Px), gly.gid, gly.size / Px, gly.font);
+                    out.symbol(pos.down(node.height / Px), gly.gid, gly.size / Px);
                 }
 
                 LayoutVariant::Color(_) => panic!("Shouldn't have a color in a vertical box???"),
@@ -162,7 +161,7 @@ impl Renderer {
                 if self.debug {
                     out.bbox(pos.up(node.height / Px), node.width / Px, (node.height - node.depth) / Px, Role::Glyph);
                 }
-                out.symbol(pos, gly.gid, gly.size / Px, gly.font);
+                out.symbol(pos, gly.gid, gly.size / Px);
             }
 
             LayoutVariant::Rule => out.rule(pos.up(node.height / Px), node.width / Px, node.height / Px),

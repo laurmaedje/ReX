@@ -21,7 +21,7 @@ impl<'f> AsLayoutNode<'f> for Glyph<'f> {
             width:  self.advance.scaled(config),
             depth:  self.depth().scaled(config),
             node:   LayoutVariant::Glyph(LayoutGlyph {
-                font: self.font,
+                math: self.math,
                 gid: self.gid,
                 size: Length::new(1.0, Em).scaled(config),
                 attachment: self.attachment.scaled(config),

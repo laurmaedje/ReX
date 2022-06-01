@@ -5,8 +5,10 @@ authors = [
     "Christopher Breeden <github@u.breeden.cc>",
     "Sebastian Köln <s3bk@protonmail.com>"
 ]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-font = { git = "https://github.com/pdf-rs/font" }
+ttf-parser = "0.15"
 unicode-math = { git = "https://github.com/s3bk/unicode-math/" }
+itertools = "0.9"
+nom = "5.1"

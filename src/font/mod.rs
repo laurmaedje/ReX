@@ -1,84 +1,72 @@
 pub mod kerning;
 mod style;
-//mod unit;
+mod opentype;
 
 pub use unicode_math::AtomType;
 pub use style::style_symbol;
 
-use font::{opentype::{OpenTypeFont, math::MathHeader}, GlyphId};
-pub use font::opentype::math::{
-    assembly::{Direction},
+pub use opentype::{
+    MathHeader,
+    Direction,
     MathConstants,
-    assembly::VariantGlyph
+    VariantGlyph
 };
 
 use crate::dimensions::{*};
 use crate::error::FontError;
 
-pub type MathFont = OpenTypeFont;
-
 #[derive(Clone)]
 pub struct FontContext<'f> {
-    pub font: &'f MathFont,
-    pub math: &'f MathHeader,
+    face: &'f ttf_parser::Face<'f>,
+    math: &'f MathHeader,
     pub constants: Constants,
     pub units_per_em: Scale<Font, Em>,
 }
 impl<'f> FontContext<'f> {
-    pub fn glyph(&self, codepoint: char) -> Result<Glyph<'f>, FontError> {
-        use font::Font;
-        let gid = self.font.gid_for_codepoint(codepoint as u32).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
-        self.glyph_from_gid(gid.0 as u16)
-    }
-    pub fn glyph_from_gid(&self, gid: u16) -> Result<Glyph<'f>, FontError> {
-        use font::{Font};
-        let font = self.font;
-        let hmetrics = font.glyph_metrics(gid).ok_or(FontError::MissingGlyphGID(gid))?;
-        let italics = self.math.glyph_info.italics_correction_info.get(gid).map(|info| info.value).unwrap_or_default();
-        let attachment = self.math.glyph_info.top_accent_attachment.get(gid).map(|info| info.value).unwrap_or_default();
-        let glyph = font.glyph(GlyphId(gid as u32)).ok_or(FontError::MissingGlyphGID(gid))?;
-        let bbox = glyph.path.bounds();
-        let ll = bbox.lower_left();
-        let ur = bbox.upper_right();
-
-        Ok(Glyph {
-            gid,
-            font: self.font,
-            advance: Length::new(hmetrics.advance, Font),
-            lsb: Length::new(hmetrics.lsb, Font),
-            italics: Length::new(italics, Font),
-            attachment: Length::new(attachment, Font),
-            bbox: (
-                Length::new(ll.x(), Font),
-                Length::new(ur.y(), Font),
-                Length::new(ur.x(), Font),
-                Length::new(ll.y(), Font),
-            )
-        })
-    }
-    pub fn new(font: &'f MathFont) -> Option<Self> {
-        use font::Font;
-        let math = font.math.as_ref()?;
-        let font_units_to_em = Scale::new(font.font_matrix().matrix.m11() as f64, Em, Font);
-        let units_per_em = font_units_to_em.inv();
+    pub fn new(face: &'f ttf_parser::Face<'f>, math: &'f MathHeader) -> Self {
+        let units_per_em = Scale::new(face.units_per_em() as f64, Font, Em);
+        let font_units_to_em = units_per_em.inv();
         let constants = Constants::new(&math.constants, font_units_to_em);
-
-        Some(FontContext {
-            font,
+        FontContext {
+            face,
             math,
             units_per_em,
             constants
+        }
+    }
+    pub fn glyph(&self, codepoint: char) -> Result<Glyph<'f>, FontError> {
+        let gid = self.face.glyph_index(codepoint).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
+        self.glyph_from_gid(gid.0 as u16)
+    }
+    pub fn glyph_from_gid(&self, gid: u16) -> Result<Glyph<'f>, FontError> {
+        let id = ttf_parser::GlyphId(gid);
+        let advance = self.face.glyph_hor_advance(id).ok_or(FontError::MissingGlyphGID(gid))?;
+        let lsb = self.face.glyph_hor_side_bearing(id).ok_or(FontError::MissingGlyphGID(gid))?;
+        let italics = self.math.glyph_info.italics_correction_info.get(gid).map(|info| info.value).unwrap_or_default();
+        let attachment = self.math.glyph_info.top_accent_attachment.get(gid).map(|info| info.value).unwrap_or_default();
+        let bbox = self.face.glyph_bounding_box(id).ok_or(FontError::MissingGlyphGID(gid))?;
+        Ok(Glyph {
+            gid,
+            math: self.math,
+            advance: Length::new(advance, Font),
+            lsb: Length::new(lsb, Font),
+            italics: Length::new(italics, Font),
+            attachment: Length::new(attachment, Font),
+            bbox: (
+                Length::new(bbox.x_min, Font),
+                Length::new(bbox.y_min, Font),
+                Length::new(bbox.x_max, Font),
+                Length::new(bbox.y_max, Font),
+            )
         })
     }
     pub fn vert_variant(&self, codepoint: char, height: Length<Font>) -> Result<VariantGlyph, FontError> {
-        use font::Font;
-        let GlyphId(gid) = self.font.gid_for_codepoint(codepoint as u32).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
-        Ok(self.math.variants.vert_variant(gid as u16, (height / Font) as u32))
+        let gid = self.face.glyph_index(codepoint).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
+        Ok(self.math.variants.vert_variant(gid.0, (height / Font) as u32))
     }
     pub fn horz_variant(&self, codepoint: char, width: Length<Font>) -> Result<VariantGlyph, FontError> {
-        use font::Font;
-        let GlyphId(gid) = self.font.gid_for_codepoint(codepoint as u32).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
-        Ok(self.math.variants.horz_variant(gid as u16, (width / Font) as u32))
+        let gid = self.face.glyph_index(codepoint).ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
+        Ok(self.math.variants.horz_variant(gid.0, (width / Font) as u32))
     }
 }
 
@@ -193,7 +181,7 @@ impl Constants {
 }
 
 pub struct Glyph<'f> {
-    pub font: &'f MathFont,
+    pub math: &'f MathHeader,
     pub gid: u16,
     // x_min, y_min, x_max, y_max
     pub bbox: (Length<Font>, Length<Font>, Length<Font>, Length<Font>),

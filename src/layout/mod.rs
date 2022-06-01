@@ -22,7 +22,7 @@ pub mod engine;
 pub mod spacing;
 
 use crate::parser::color::RGBA;
-use crate::font::{FontContext, MathFont};
+use crate::font::{FontContext, MathHeader};
 use std::ops::Deref;
 use std::fmt;
 use std::cmp::{max, min};
@@ -144,7 +144,7 @@ pub struct LayoutGlyph<'f> {
     pub offset: Length<Px>,
     pub attachment: Length<Px>,
     pub italics: Length<Px>,
-    pub font: &'f MathFont
+    pub math: &'f MathHeader,
 }
 
 #[allow(dead_code)]
