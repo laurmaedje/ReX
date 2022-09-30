@@ -8,7 +8,7 @@ authors = [
 edition = "2021"
 
 [dependencies]
-ttf-parser = "0.15"
+ttf-parser = "0.17"
 unicode-math = { git = "https://github.com/s3bk/unicode-math/" }
 itertools = "0.9"
 nom = "5.1"
