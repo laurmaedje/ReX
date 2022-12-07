@@ -972,11 +972,6 @@ impl MathVariants {
     /// With the number of glyphs required to construct the variant is larger
     /// than `ITERATION_LIMIT` we return `None`.
     fn smallest_upper_bound(&self, parts: &[GlyphPartRecord], size: u32) -> (u16, f64) {
-        let (small, _) = self.advance_without_optional(parts);
-        if small < size {
-            return (0, 0.0)
-        }
-
         // Otherwise, check the next largest variant with optional glyphs included.
         let (mut small, mut large, opt_small, opt_large) = self.advance_with_optional(parts);
         if large >= size {

@@ -13,6 +13,7 @@ pub enum Environment {
     BbMatrix,
     VMatrix,
     VvMatrix,
+    Cases,
 }
 
 impl Environment {
@@ -26,6 +27,7 @@ impl Environment {
             "Bmatrix" => Some(Environment::BbMatrix),
             "vmatrix" => Some(Environment::VMatrix),
             "Vmatrix" => Some(Environment::VvMatrix),
+            "cases" => Some(Environment::Cases),
             _ => None,
         }
     }
@@ -41,6 +43,19 @@ impl Environment {
             Environment::BbMatrix => matrix_with(lex, local, '{', '}'),
             Environment::VMatrix => matrix_with(lex, local, '|', '|'),
             Environment::VvMatrix => matrix_with(lex, local, '\u{2016}', '\u{2016}'),
+            Environment::Cases => matrix_common(
+                lex,
+                local,
+                Some('{'),
+                None,
+                ArrayColumnsFormatting {
+                    columns: vec![ArraySingleColumnFormatting {
+                        alignment: ArrayColumnAlign::Left,
+                        left_vert: 0,
+                    }],
+                    right_vert: 0
+                },
+            ),
         }
     }
 }
@@ -92,10 +107,10 @@ impl Default for ArrayColumnAlign {
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArraySingleColumnFormatting {
     /// The alignment of the column.  Defaults to Centered.
-    alignment: ArrayColumnAlign,
+    pub alignment: ArrayColumnAlign,
 
     /// The number of vertical marks before column.
-    left_vert: u8,
+    pub left_vert: u8,
 }
 
 /// The collection of column formatting for an array.  This includes the vertical
@@ -104,10 +119,10 @@ pub struct ArraySingleColumnFormatting {
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct ArrayColumnsFormatting {
     /// The formatting specifications for each column
-    columns: Vec<ArraySingleColumnFormatting>,
+    pub columns: Vec<ArraySingleColumnFormatting>,
 
     /// The number of vertical marks after the last column.
-    right_vert: u8,
+    pub right_vert: u8,
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -127,7 +142,7 @@ pub struct Array {
 
 
 fn matrix<'a>(lex: &mut Lexer<'a>, style: Style) -> ParseResult<'a, ParseNode> {
-    matrix_common(lex, style, None, None)
+    matrix_common(lex, style, None, None, ArrayColumnsFormatting::default())
 }
 
 fn matrix_with<'a>(lex: &mut Lexer<'a>,
@@ -135,13 +150,15 @@ fn matrix_with<'a>(lex: &mut Lexer<'a>,
                left_delimiter: char,
                right_delimiter: char)
                -> ParseResult<'a, ParseNode> {
-    matrix_common(lex, style, Some(left_delimiter), Some(right_delimiter))
+    matrix_common(lex, style, Some(left_delimiter), Some(right_delimiter),
+                  ArrayColumnsFormatting::default())
 }
 
 fn matrix_common<'a>(lex: &mut Lexer<'a>,
                  style: Style,
                  left_delimiter: Option<char>,
-                 right_delimiter: Option<char>)
+                 right_delimiter: Option<char>,
+                 col_format: ArrayColumnsFormatting)
                  -> ParseResult<'a, ParseNode> {
     // matrix bodies are paresed like arrays.
     let body = array_body(lex, style)?;
@@ -160,7 +177,7 @@ fn matrix_common<'a>(lex: &mut Lexer<'a>,
                                               });
 
     Ok(ParseNode::Array(Array {
-                            col_format: ArrayColumnsFormatting::default(),
+                            col_format,
                             rows: body,
                             left_delimiter,
                             right_delimiter,

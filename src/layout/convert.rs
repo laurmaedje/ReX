@@ -55,16 +55,15 @@ impl<'f> AsLayoutNode<'f> for VariantGlyph {
                 match dir {
                     Direction::Vertical => {
                         let mut contents = builders::VBox::new();
-                        for instr in parts {
+                        for instr in parts.iter().rev(){
                             let glyph = config.ctx.glyph_from_gid(instr.gid)?;
-                            contents.insert_node(0, glyph.as_layout(config)?);
+                            contents.add_node(glyph.as_layout(config)?);
                             if instr.overlap != 0 {
                                 let overlap = Length::new(instr.overlap, Font);
-                                let kern = -(overlap + glyph.depth()).scaled(config);
+                                let kern = -overlap.scaled(config);
                                 contents.add_node(kern!(vert: kern));
                             }
                         }
-
                         Ok(contents.build())
                     },
 
@@ -72,13 +71,13 @@ impl<'f> AsLayoutNode<'f> for VariantGlyph {
                         let mut contents = builders::HBox::new();
                         for instr in parts {
                             let glyph = config.ctx.glyph_from_gid(instr.gid)?;
+                            contents.add_node(glyph.as_layout(config)?);
                             if instr.overlap != 0 {
-                                let kern = -Length::new(instr.overlap, Font).scaled(config);
+                                let overlap = Length::new(instr.overlap, Font);
+                                let kern = -overlap.scaled(config);
                                 contents.add_node(kern!(horz: kern));
                             }
-                            contents.add_node(glyph.as_layout(config)?);
                         }
-
                         Ok(contents.build())
                     }
                 }

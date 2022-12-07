@@ -13,7 +13,7 @@ use super::convert::Scaled;
 use super::spacing::{atom_space, Spacing};
 use crate::parser::nodes::{BarThickness, MathStyle, ParseNode, Accent, Delimited, GenFraction, Radical, Scripts, Stack};
 use crate::parser::symbols::Symbol;
-use crate::environments::Array;
+use crate::environments::{Array, ArrayColumnAlign};
 use crate::dimensions::{*};
 use crate::layout;
 use crate::error::{LayoutResult, LayoutError};
@@ -636,7 +636,7 @@ impl<'f> Layout<'f> {
         // TODO: let jot = UNITS_PER_EM / 4;
         let strut_height = Length::new(0.7, Em) * config.font_size; // \strutbox height = 0.7\baseline
         let strut_depth = Length::new(0.3, Em) * config.font_size; // \strutbox depth  = 0.3\baseline
-        let row_sep = Length::new(0.25, Em) * config.font_size;
+        let row_sep = Length::new(0.5, Em) * config.font_size;
         let column_sep = Length::new(5.0 / 12.0, Em) * config.font_size;
 
         // Don't bother constructing a new node if there is nothing.
@@ -697,7 +697,12 @@ impl<'f> Layout<'f> {
             for (row_idx, mut row) in col.into_iter().enumerate() {
                 // Center columns as necessary
                 if row.width < col_widths[col_idx] {
-                    row.alignment = Alignment::Centered(row.width);
+                    let format = array.col_format.columns.get(col_idx).copied().unwrap_or_default();
+                    row.alignment = match format.alignment {
+                        ArrayColumnAlign::Centered => Alignment::Centered(row.width),
+                        ArrayColumnAlign::Left => Alignment::Left,
+                        ArrayColumnAlign::Right => Alignment::Right(row.width),
+                    };
                     row.width = col_widths[col_idx];
                 }
 
@@ -712,12 +717,9 @@ impl<'f> Layout<'f> {
                 // the row_seperation.
                 // FIXME: This should be actual depth, not additional kerning
                 let node = row.as_node();
-                if row_idx + 1 == num_rows {
-                    let depth = max(-node.depth, row_sep);
-                    vbox.add_node(node);
-                    vbox.add_node(kern![vert: depth]);
-                } else {
-                    vbox.add_node(node);
+                vbox.add_node(node);
+
+                if row_idx + 1 < num_rows {
                     vbox.add_node(kern![vert: row_sep]);
                 }
             }
@@ -733,44 +735,33 @@ impl<'f> Layout<'f> {
             hbox.add_node(kern![horz: config.ctx.constants.null_delimiter_space * config.font_size]);
         }
 
-        // TODO: Reference array vertical alignment (optional [bt] arguments)
-        // Vertically center the array on axis.
         // Note: hbox has no depth, so hbox.height is total height.
         let height = hbox.height;
-        let mut vbox = builders::VBox::new();
-        let offset = height * 0.5 - config.ctx.constants.axis_height.scaled(config);
-        vbox.set_offset(offset);
-        vbox.add_node(hbox.build());
-        let vbox = vbox.build();
-
-        // Now that we know the layout of the matrix body we can place scaled delimiters
-        // First check if there are any delimiters to add, if not just return.
-        if array.left_delimiter.is_none() && array.right_delimiter.is_none() {
-            self.add_node(vbox);
-            return Ok(());
-        }
 
         // place delimiters in an hbox surrounding the matrix body
-        let mut hbox = builders::HBox::new();
+        let mut container = builders::HBox::new();
         let axis = config.ctx.constants.axis_height.scaled(config);
-        let clearance = max(height * config.ctx.constants.delimiter_factor,
-                            height - config.ctx.constants.delimiter_short_fall * config.font_size);
+        let clearance = height * 1.05;
 
         if let Some(left) = array.left_delimiter {
             let left = config.ctx.vert_variant(left.codepoint, config.to_font(clearance))?
                 .as_layout(config)?
                 .centered(axis);
-            hbox.add_node(left);
+            container.add_node(left);
         }
 
-        hbox.add_node(vbox);
+        let mut vbox = builders::VBox::new();
+        vbox.add_node(hbox.build());
+        let vbox = vbox.build().centered(axis);
+        container.add_node(vbox);
+
         if let Some(right) = array.right_delimiter {
             let right = config.ctx.vert_variant(right.codepoint, config.to_font(clearance))?
                 .as_layout(config)?
                 .centered(axis);
-            hbox.add_node(right);
+            container.add_node(right);
         }
-        self.add_node(hbox.build());
+        self.add_node(container.build());
 
         Ok(())
     }
